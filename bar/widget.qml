@@ -6,9 +6,12 @@ import qs.Ui
 
 BarWidget {
     id: root
-    moduleName: "hancore.ctrl-swap"
+    moduleName: "hancore.keyboard-center"
 
     property string swapTool: Qt.resolvedUrl("../scripts/ctrl_swap.py").toString().replace("file://", "")
+    property string inputTool: Qt.resolvedUrl("../scripts/keyboard_center.py").toString().replace("file://", "")
+    property string inputBadge: "󰌌"
+    property string inputTooltip: "Keyboard Center"
     readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
 
     implicitWidth: button.implicitWidth
@@ -43,12 +46,56 @@ BarWidget {
 
     onBarChanged: injectPanel()
 
-    // Re-apply the swap after shell/Hyprland restarts when the user left it on.
-    Component.onCompleted: ensureProcess.running = true
+    function applyInputStatus(raw) {
+        try {
+            const data = JSON.parse(raw);
+            if (data.error) return;
+            const schema = data.schema || "";
+            const choices = Array.isArray(data.schemas) ? data.schemas : [];
+            const selected = choices.find(item => item.id === schema);
+            root.inputBadge = selected?.badge || (data.inputMethod === "keyboard-jp" ? "JP" : (data.inputMethod === "keyboard-us" ? "A" : (data.inputMethod ? "中" : "󰌌")));
+            root.inputTooltip = (data.displayName || "Input Method") + (data.variant ? " · " + data.variant : "");
+        } catch (error) { }
+    }
+
+    Timer { id: inputPoll; interval: 1500; repeat: true; running: true; onTriggered: inputStatus.running = true }
+    Process {
+        id: inputStatus
+        command: ["python3", root.inputTool, "status"]
+        running: true
+        property string buffer: ""
+        stdout: SplitParser { splitMarker: "\n"; onRead: function(line) { inputStatus.buffer += line; } }
+        onRunningChanged: {
+            if (!running) {
+                root.applyInputStatus(buffer);
+                buffer = "";
+            }
+        }
+    }
+
+    // Re-apply the user-level voice binding after the shell has finished
+    // registering Hyprland runtime bindings. keyd itself is persistent.
+    Component.onCompleted: ensureDelay.start()
+
+    Timer {
+        id: ensureDelay
+        interval: 1200
+        repeat: false
+        onTriggered: {
+            ensureProcess.running = true;
+            layoutEnsureProcess.running = true;
+        }
+    }
 
     Process {
         id: ensureProcess
         command: ["python3", root.swapTool, "ensure"]
+        running: false
+    }
+
+    Process {
+        id: layoutEnsureProcess
+        command: ["python3", root.inputTool, "ensure-layout"]
         running: false
     }
 
@@ -63,8 +110,8 @@ BarWidget {
     BarIconButton {
         id: button
         bar: root.bar
-        text: "󰌌"
-        tooltipText: "Ctrl Swap — 交换 CapsLock 与 Left Ctrl"
+        text: root.inputBadge
+        tooltipText: root.inputTooltip
         onPressed: function(buttonCode) {
             if (buttonCode === Qt.LeftButton) root.toggle();
         }

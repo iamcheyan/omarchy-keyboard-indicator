@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
-  "id": "hancore.ctrl-swap",
-  "name": "Ctrl Swap",
-  "version": "0.1.0",
+  "id": "hancore.keyboard-center",
+  "name": "Keyboard Center",
+  "version": "0.3.0",
   "author": "HANCORE",
   "license": "MIT",
-  "description": "Swap CapsLock and Left Ctrl at the XKB level with a top-bar toggle. Non-invasive: applied at runtime via hyprctl, never writes config files, fully reversible.",
+  "description": "Unified Omarchy keyboard center for CapsLock/Ctrl remapping, CapsLock-position Voxtype dictation, Fcitx5 input methods, and keyboard layouts.",
   "keepLoaded": true,
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "bar/widget.qml"
   },
   "barWidget": {
-    "displayName": "Ctrl Swap",
-    "description": "Toggle CapsLock ↔ Left Ctrl swap from the top bar. Runtime-only XKB option, restored when toggled off.",
+    "displayName": "Keyboard Center",
+    "description": "Manage keyboard remapping, CapsLock-position dictation, Fcitx5 input methods, and XKB keyboard layouts from the top bar.",
     "category": "Desktop",
     "allowMultiple": false,
     "defaultSection": "right"

@@ -1,39 +1,86 @@
-# Ctrl Swap
+# Keyboard Center
 
-Ctrl Swap 是一个 Omarchy 体验增强插件：在顶栏提供一个开关，把 **CapsLock 与 Left Ctrl 在 XKB 层交换**。适合习惯把 Ctrl 放在小拇指 home 位（HHKB / 老程序员布局）的人。
+Keyboard Center is an Omarchy experience-enhancement plugin for keyboard remapping, CapsLock-position dictation, Fcitx5 input methods, and XKB keyboard layouts.
 
-## 特性
+## Features
 
-- 单一开关：开启即交换，关闭即还原，没有多余选项。
-- **XKB 层生效**：对所有应用同时成立——GUI、终端、tmux 内层、甚至 SSH 到远程机器的会话里，物理 CapsLock 发出的都是真正的 `Control_L`。
-- **非侵入**：通过 Lua 桥（`hyprctl eval 'hl.config(...)'`）运行时应用，不写入 `~/.config/hypr/` 的任何文件；关闭开关立即还原原按键映射。
-- **重启记忆**：开关状态持久化；Hyprland/shell 重启后插件自动重新应用。
-- 无守护进程、无第二个 Quickshell 实例、不需要 root。
+- Native Omarchy top-bar widget and settings panel.
+- Independent toggles for the CapsLock/Left Ctrl swap and CapsLock-position Voxtype dictation.
+- Applies to graphical applications, terminals, tmux, SSH sessions, and Hyprland global shortcuts because keyd remaps the input before they receive it.
+- Uses keyd and a small system configuration managed through an explicit `pkexec` authentication prompt.
+- Remembers the enabled state; keyd continues to run as a system service after shell or Hyprland restarts.
+- Keeps the UI and state management in the user session; privileged work is limited to installing/removing the keyd config.
 
-## 安装
+## Installation
 
 ```sh
 omarchy plugin add https://github.com/iamcheyan/omarchy-ctrl-swap.git --enable
 ```
 
-顶栏出现键盘图标，点开面板，打开「交换 CapsLock ⇄ Ctrl」即可。
+Open the `Keyboard Center` keyboard icon in the top bar. The panel follows Omarchy's native theme and uses the shell's `KeyboardPanel`, `ToggleSwitch`, and themed selector patterns.
 
-## 已知边界
+The plugin automatically reapplies the selected state when the Omarchy shell starts. Disable or remove the plugin to restore the normal mapping and stop the plugin's runtime integration.
 
-- Compose 键冲突：若你的 `kb_options` 含有 `compose:caps`（Omarchy 默认），交换期间 Compose 功能会跟随 CapsLock 键名落到物理左 Ctrl 上。不用 Compose 可无视；需要保留请自行把 compose 挪到其他键位。
-- Hyprland 重载/重启会把 `kb_options` 重置为配置文件的值。本插件的 service 会在 shell 启动时按持久化的开关状态自动重新应用；手动执行 `omarchy reload` 后重开一次开关即可。
-- 只交换 Left Ctrl；Right Ctrl 不受影响。
+## Interface
 
-## 工作原理
+The default panel puts the active input method and keyboard layout first, followed by the optional keyboard remap and CapsLock-position dictation switches.
+
+![Keyboard Center default panel](screenshot-2026-08-22_17-41-44.png)
+
+_Default panel with the current input method and keyboard layout._
+
+Both selectors use compact dropdown menus so the available input schemes and layouts stay out of the way until needed.
+
+![Keyboard Center expanded selector](screenshot-2026-08-22_17-42-20.png)
+
+_Expanded input-method selector._
+
+## How it works
+
+When enabled, the plugin generates this keyd configuration:
 
 ```text
-hyprctl eval 'hl.config({ input = { kb_options = "<原选项>,ctrl:swapcaps" } })'   # 开启
-hyprctl eval 'hl.config({ input = { kb_options = "<原选项>" } })'                 # 关闭
+[ids]
+*
+
+[main]
+capslock = overload(control, f24)
+leftcontrol = capslock
 ```
 
-脚本只做字符串级的选项增删：先读取当前生效值，追加或移除 `ctrl:swapcaps` 后写回。开关状态存于 `~/.local/state/hancore.ctrl-swap/enabled`。
+The file is installed as `/etc/keyd/hancore-ctrl-swap.conf` after the user approves the `pkexec` prompt. When disabled, only this file is removed and keyd is restarted. The enabled intent is stored at:
 
-## 验证
+```text
+~/.local/state/hancore.keyboard-center/enabled
+```
+
+## Optional CapsLock-position dictation
+
+The second panel switch registers a binding for the physical key in the
+CapsLock position. Press and release that key by itself to run Omarchy's
+standard Voxtype toggle command:
+
+```text
+voxtype record toggle
+```
+
+When the swap is active, keyd uses `overload(control, f24)`: holding the key
+with another key keeps normal Ctrl shortcuts such as Ctrl+C and Ctrl+W, while
+a standalone tap emits the internal `F24` signal. When the swap is disabled,
+a transparent physical-key release binding preserves normal CapsLock behavior
+while still toggling Voxtype. This option requires the `voxtype` command.
+
+## Boundary and compatibility notes
+
+- Only Left Ctrl and CapsLock are swapped. Right Ctrl is unchanged.
+- This plugin requires one-time administrator authentication when keyd is first installed, and authentication again when the system config is changed.
+- It does not install a permissive Polkit rule; authentication is handled by the normal desktop Polkit agent.
+
+## Uninstallation
+
+Disable or remove the plugin through Omarchy's plugin manager. The plugin removes its runtime integration and restores the original keyboard mapping. It does not remove unrelated Hyprland or keyboard configuration.
+
+## Validation
 
 ```sh
 omarchy plugin validate .

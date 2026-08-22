@@ -3,13 +3,14 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import pathlib
-import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 STATE_DIR = pathlib.Path(
@@ -17,7 +18,6 @@ STATE_DIR = pathlib.Path(
 ) / "hancore.keyboard-center"
 STATE_FILE = STATE_DIR / "enabled"
 KEYD_DEST = pathlib.Path("/etc/keyd/hancore-ctrl-swap.conf")
-KEYD_CACHE = pathlib.Path.home() / ".cache/hancore-ctrl-swap-keyd"
 KEYD_REPOSITORY = "https://github.com/rvaiya/keyd.git"
 # Pin the source that is compiled and installed through pkexec.  The commit
 # hash is the integrity check: a moving branch must never reach the root
@@ -27,10 +27,6 @@ VOICE_STATE_FILE = STATE_DIR / "voice_enabled"
 VOICE_DESCRIPTION = "CapsLock position voice dictation"
 LEGACY_VOICE_DESCRIPTION = "Ctrl Swap voice dictation"
 VOICE_BINDINGS = ("F24", "code:66", "CONTROL_L + CONTROL_L")
-
-
-def shell_quote(value: str) -> str:
-    return shlex.quote(value)
 
 
 def run(*args: str) -> str:
@@ -57,11 +53,57 @@ def clear_legacy_xkb_swap() -> None:
         raise RuntimeError(result.stderr.strip() or "Could not remove the legacy XKB swap")
 
 
-def root_command(payload: str) -> None:
+PRIVILEGED_HELPER = r'''
+import base64
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+payload = json.load(sys.stdin)
+allowed = {
+    "/etc/keyd/hancore-ctrl-swap.conf",
+    "/usr/local/bin/keyd",
+    "/usr/local/bin/keyd-application-mapper",
+    "/usr/local/lib/systemd/system/keyd.service",
+}
+files = payload.get("files", {})
+removals = payload.get("remove", [])
+if any(path not in allowed for path in [*files, *removals]):
+    raise SystemExit("refusing an unexpected privileged destination")
+
+for path, encoded in files.items():
+    destination = Path(path)
+    destination.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.hancore-tmp")
+    temporary.write_bytes(base64.b64decode(encoded, validate=True))
+    os.chmod(temporary, 0o755 if path.endswith(("/keyd", "-application-mapper")) else 0o644)
+    os.replace(temporary, destination)
+for path in removals:
+    Path(path).unlink(missing_ok=True)
+if "/usr/local/lib/systemd/system/keyd.service" in files:
+    subprocess.run(["systemctl", "daemon-reload"], check=True)
+if payload.get("enable"):
+    subprocess.run(["systemctl", "enable", "--now", "keyd"], check=True)
+elif payload.get("restart"):
+    subprocess.run(["systemctl", "restart", "keyd"], check=True)
+'''
+
+
+def root_command(files: dict[str, bytes] | None = None, remove: tuple[str, ...] = (), *, enable: bool = False, restart: bool = False) -> None:
     if shutil.which("pkexec") is None:
         raise RuntimeError("pkexec is required to install the keyboard remap")
+    encoded = {
+        path: base64.b64encode(content).decode("ascii")
+        for path, content in (files or {}).items()
+    }
+    payload = json.dumps({"files": encoded, "remove": list(remove), "enable": enable, "restart": restart})
     result = subprocess.run(
-        ["pkexec", "bash", "-c", payload], capture_output=True, text=True
+        ["pkexec", "python3", "-c", PRIVILEGED_HELPER],
+        input=payload,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
@@ -96,55 +138,50 @@ def ensure_keyd_installed(config_path: pathlib.Path) -> bool:
         return False
     if shutil.which("git") is None or shutil.which("make") is None:
         raise RuntimeError("keyd is not installed and git/make are unavailable")
-    if not (KEYD_CACHE / ".git").exists():
-        if KEYD_CACHE.exists():
-            raise RuntimeError(f"keyd cache is not a git checkout: {KEYD_CACHE}")
-        KEYD_CACHE.parent.mkdir(parents=True, exist_ok=True)
-        result = subprocess.run(
-            [
-                "git", "clone", "--no-checkout", "--depth", "1",
-                KEYD_REPOSITORY, str(KEYD_CACHE),
-            ],
+    with tempfile.TemporaryDirectory(prefix="hancore-keyd-") as temp_dir:
+        checkout_dir = pathlib.Path(temp_dir) / "keyd"
+        clone = subprocess.run(
+            ["git", "clone", "--no-checkout", "--depth", "1", KEYD_REPOSITORY, str(checkout_dir)],
             capture_output=True,
             text=True,
         )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or "Could not download keyd")
-    fetch = subprocess.run(
-        ["git", "-C", str(KEYD_CACHE), "fetch", "--depth", "1", KEYD_REPOSITORY, KEYD_COMMIT],
-        capture_output=True,
-        text=True,
-    )
-    if fetch.returncode != 0:
-        raise RuntimeError(fetch.stderr.strip() or "Could not fetch the pinned keyd revision")
-    checkout = subprocess.run(
-        ["git", "-C", str(KEYD_CACHE), "checkout", "--force", "--detach", KEYD_COMMIT],
-        capture_output=True,
-        text=True,
-    )
-    if checkout.returncode != 0:
-        raise RuntimeError(checkout.stderr.strip() or "Could not select the pinned keyd revision")
-    revision = subprocess.run(
-        ["git", "-C", str(KEYD_CACHE), "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-    )
-    if revision.returncode != 0 or revision.stdout.strip() != KEYD_COMMIT:
-        raise RuntimeError("keyd checkout failed the pinned revision check")
-    status = subprocess.run(
-        ["git", "-C", str(KEYD_CACHE), "status", "--porcelain"],
-        capture_output=True,
-        text=True,
-    )
-    if status.returncode != 0 or status.stdout.strip():
-        raise RuntimeError("keyd checkout contains unexpected local changes")
-    payload = (
-        f"set -eu; make -C {shell_quote(str(KEYD_CACHE))} all; "
-        f"make -C {shell_quote(str(KEYD_CACHE))} install; "
-        f"install -Dm 0644 {shell_quote(str(config_path))} {shell_quote(str(KEYD_DEST))}; "
-        "systemctl enable --now keyd; systemctl restart keyd"
-    )
-    root_command(payload)
+        if clone.returncode != 0:
+            raise RuntimeError(clone.stderr.strip() or "Could not download keyd")
+        fetch = subprocess.run(
+            ["git", "-C", str(checkout_dir), "fetch", "--depth", "1", KEYD_REPOSITORY, KEYD_COMMIT],
+            capture_output=True,
+            text=True,
+        )
+        if fetch.returncode != 0:
+            raise RuntimeError(fetch.stderr.strip() or "Could not fetch the pinned keyd revision")
+        checkout = subprocess.run(
+            ["git", "-C", str(checkout_dir), "checkout", "--force", "--detach", KEYD_COMMIT],
+            capture_output=True,
+            text=True,
+        )
+        if checkout.returncode != 0:
+            raise RuntimeError(checkout.stderr.strip() or "Could not select the pinned keyd revision")
+        status = subprocess.run(
+            ["git", "-C", str(checkout_dir), "status", "--porcelain", "--untracked-files=all"],
+            capture_output=True,
+            text=True,
+        )
+        if status.returncode != 0 or status.stdout.strip():
+            raise RuntimeError("keyd checkout contains unexpected local changes")
+        build = subprocess.run(["make", "-C", str(checkout_dir), "all"], capture_output=True, text=True)
+        if build.returncode != 0:
+            raise RuntimeError(build.stderr.strip() or "Could not build keyd")
+        files = {
+            "/usr/local/bin/keyd": (checkout_dir / "bin/keyd").read_bytes(),
+            "/usr/local/bin/keyd-application-mapper": (checkout_dir / "bin/keyd-application-mapper").read_bytes(),
+            "/usr/local/lib/systemd/system/keyd.service": (
+                "[Unit]\nDescription=key remapping daemon\n\n"
+                "[Service]\nType=simple\nExecStart=/usr/local/bin/keyd\n\n"
+                "[Install]\nWantedBy=multi-user.target\n"
+            ).encode(),
+            str(KEYD_DEST): config_path.read_bytes(),
+        }
+    root_command(files, enable=True)
     return True
 
 
@@ -156,17 +193,9 @@ def apply_keyd(enabled: bool, voice_wake: bool = False) -> None:
         freshly_installed = ensure_keyd_installed(config_path)
         if freshly_installed:
             return
-        payload = (
-            f"set -eu; install -Dm 0644 {shell_quote(str(config_path))} "
-            f"{shell_quote(str(KEYD_DEST))}; systemctl enable --now keyd; "
-            "systemctl restart keyd"
-        )
+        root_command({str(KEYD_DEST): config_path.read_bytes()}, enable=True)
     else:
-        payload = (
-            f"set -eu; rm -f {shell_quote(str(KEYD_DEST))}; "
-            "systemctl restart keyd || true"
-        )
-    root_command(payload)
+        root_command(remove=(str(KEYD_DEST),), restart=True)
 
 
 def persist(enabled: bool) -> None:

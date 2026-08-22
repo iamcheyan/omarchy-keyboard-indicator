@@ -11,7 +11,7 @@ BarWidget {
     property string swapTool: Qt.resolvedUrl("../scripts/ctrl_swap.py").toString().replace("file://", "")
     property string inputTool: Qt.resolvedUrl("../scripts/keyboard_center.py").toString().replace("file://", "")
     property string inputBadge: "󰌌"
-    property string inputTooltip: "Keyboard Center"
+    property string inputTooltip: "Keyboard Indicator"
     readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
 
     implicitWidth: button.implicitWidth

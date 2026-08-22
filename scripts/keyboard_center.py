@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fcitx5 input-method and Hyprland keyboard-layout bridge for Keyboard Center."""
+"""Fcitx5 input-method and Hyprland keyboard-layout bridge for Keyboard Indicator."""
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "hancore.keyboard-center",
-  "name": "Keyboard Center",
+  "name": "Keyboard Indicator",
   "version": "0.3.0",
   "author": "HANCORE",
   "license": "MIT",
@@ -12,8 +12,8 @@
     "barWidget": "bar/widget.qml"
   },
   "barWidget": {
-    "displayName": "Keyboard Center",
-    "description": "Manage keyboard remapping, CapsLock-position dictation, Fcitx5 input methods, and XKB keyboard layouts from the top bar.",
+    "displayName": "Keyboard Indicator",
+    "description": "Show and manage keyboard remapping, CapsLock-position dictation, Fcitx5 input methods, and XKB keyboard layouts from the top bar.",
     "category": "Desktop",
     "allowMultiple": false,
     "defaultSection": "right"

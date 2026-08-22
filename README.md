@@ -1,6 +1,6 @@
-# Keyboard Center
+# Keyboard Indicator
 
-Keyboard Center is an Omarchy experience-enhancement plugin for keyboard remapping, CapsLock-position dictation, Fcitx5 input methods, and XKB keyboard layouts.
+Keyboard Indicator is an Omarchy experience-enhancement plugin for keyboard remapping, CapsLock-position dictation, Fcitx5 input methods, and XKB keyboard layouts.
 
 ## Features
 
@@ -14,10 +14,10 @@ Keyboard Center is an Omarchy experience-enhancement plugin for keyboard remappi
 ## Installation
 
 ```sh
-omarchy plugin add https://github.com/iamcheyan/omarchy-ctrl-swap.git --enable
+omarchy plugin add https://github.com/iamcheyan/omarchy-keyboard-indicator.git --enable
 ```
 
-Open the `Keyboard Center` keyboard icon in the top bar. The panel follows Omarchy's native theme and uses the shell's `KeyboardPanel`, `ToggleSwitch`, and themed selector patterns.
+Open the `Keyboard Indicator` keyboard icon in the top bar. The panel follows Omarchy's native theme and uses the shell's `KeyboardPanel`, `ToggleSwitch`, and themed selector patterns.
 
 The plugin automatically reapplies the selected state when the Omarchy shell starts. Disable or remove the plugin to restore the normal mapping and stop the plugin's runtime integration.
 
@@ -25,13 +25,13 @@ The plugin automatically reapplies the selected state when the Omarchy shell sta
 
 The default panel puts the active input method and keyboard layout first, followed by the optional keyboard remap and CapsLock-position dictation switches.
 
-![Keyboard Center default panel](screenshot-2026-08-22_17-41-44.png)
+![Keyboard Indicator default panel](screenshot-2026-08-22_17-41-44.png)
 
 _Default panel with the current input method and keyboard layout._
 
 Both selectors use compact dropdown menus so the available input schemes and layouts stay out of the way until needed.
 
-![Keyboard Center expanded selector](screenshot-2026-08-22_17-42-20.png)
+![Keyboard Indicator expanded selector](screenshot-2026-08-22_17-42-20.png)
 
 _Expanded input-method selector._
 

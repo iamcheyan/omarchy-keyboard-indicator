@@ -26,7 +26,14 @@ KEYD_COMMIT = "f564288ac2b19d2305a5b39023c474805ff8fce5"
 VOICE_STATE_FILE = STATE_DIR / "voice_enabled"
 VOICE_DESCRIPTION = "CapsLock position voice dictation"
 LEGACY_VOICE_DESCRIPTION = "Ctrl Swap voice dictation"
-VOICE_BINDINGS = ("F24", "code:66", "CONTROL_L + CONTROL_L")
+VOICE_BINDINGS = (
+    "F24",
+    "Caps_Lock",
+    "Multi_key",
+    "code:66",
+    "code:58",
+    "CONTROL_L + CONTROL_L",
+)
 
 
 def run(*args: str) -> str:
@@ -215,10 +222,10 @@ def enable() -> None:
 
 
 def disable() -> None:
-    if VOICE_STATE_FILE.exists():
-        voice_disable()
     apply_keyd(False)
     persist(False)
+    if VOICE_STATE_FILE.exists():
+        voice_enable(False)
 
 
 def eval_lua(lua: str) -> None:
@@ -256,12 +263,22 @@ def voice_enable(reconfigure_keyd: bool = True) -> None:
     if reconfigure_keyd and STATE_FILE.exists() and not keyd_config_matches(True):
         apply_keyd(True, True)
     remove_owned_voice_bindings()
-    eval_lua(
-        'hl.bind("F24", hl.dsp.exec_cmd("voxtype record toggle"), '
-        '{ release = true, non_consuming = true, description = "CapsLock position voice dictation" }); '
-        'hl.bind("code:66", hl.dsp.exec_cmd("voxtype record toggle"), '
-        '{ release = true, transparent = true, description = "CapsLock position voice dictation" })'
-    )
+    if STATE_FILE.exists():
+        binding = (
+            'hl.bind("F24", hl.dsp.exec_cmd("voxtype record toggle"), '
+            '{ release = true, non_consuming = true, '
+            'description = "CapsLock position voice dictation" })'
+        )
+    else:
+        binding = (
+            'hl.bind("Caps_Lock", hl.dsp.exec_cmd("voxtype record toggle"), '
+            '{ transparent = true, '
+            'description = "CapsLock position voice dictation" }); '
+            'hl.bind("Multi_key", hl.dsp.exec_cmd("voxtype record toggle"), '
+            '{ transparent = true, '
+            'description = "CapsLock position voice dictation" })'
+        )
+    eval_lua(binding)
     VOICE_STATE_FILE.write_text("1\n")
 
 

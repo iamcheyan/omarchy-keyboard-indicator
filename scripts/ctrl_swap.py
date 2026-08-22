@@ -266,7 +266,7 @@ def voice_enable(reconfigure_keyd: bool = True) -> None:
     if STATE_FILE.exists():
         binding = (
             'hl.bind("F24", hl.dsp.exec_cmd("voxtype record toggle"), '
-            '{ release = true, non_consuming = true, '
+            '{ release = true, non_consuming = false, '
             'description = "CapsLock position voice dictation" })'
         )
     else:

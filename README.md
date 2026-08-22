@@ -38,7 +38,33 @@ _Expanded input-method selector._
 
 ## How it works
 
-When enabled, the plugin generates this keyd configuration:
+keyd stays installed whenever the Ctrl swap, CapsLock-position dictation, or
+both are on. The generated configuration depends on the two independent
+switches. Voice always occupies the physical CapsLock key (left of A); the
+swap never moves dictation to the original Left Ctrl key.
+
+Swap only:
+
+```text
+[ids]
+*
+
+[main]
+capslock = layer(control)
+leftcontrol = capslock
+```
+
+Dictation only (CapsLock is consumed, so it no longer toggles case):
+
+```text
+[ids]
+*
+
+[main]
+capslock = f24
+```
+
+Swap and dictation together (tap = Voxtype, hold with another key = Ctrl):
 
 ```text
 [ids]
@@ -49,7 +75,7 @@ capslock = overload(control, f24)
 leftcontrol = capslock
 ```
 
-The file is installed as `/etc/keyd/hancore-ctrl-swap.conf` after the user approves the `pkexec` prompt. When disabled, only this file is removed and keyd is restarted. The enabled intent is stored at:
+The file is installed as `/etc/keyd/hancore-ctrl-swap.conf` after the user approves the `pkexec` prompt. The file carries a schema marker; whenever both switches are off it stays installed with an identity mapping (`capslock = capslock`) so keyd keeps running without changing any behavior, and a config missing the marker is treated as drift and rebuilt. The swap intent is stored at:
 
 ```text
 ~/.local/state/hancore.keyboard-center/enabled
@@ -57,19 +83,20 @@ The file is installed as `/etc/keyd/hancore-ctrl-swap.conf` after the user appro
 
 ## Optional CapsLock-position dictation
 
-The second panel switch registers a binding for the physical key in the
-CapsLock position. Press and release that key by itself to run Omarchy's
-standard Voxtype toggle command:
+The second panel switch occupies the physical key in the CapsLock position.
+Press and release that key by itself to run Omarchy's standard Voxtype
+toggle command:
 
 ```text
 voxtype record toggle
 ```
 
-When the swap is active, keyd uses `overload(control, f24)`: holding the key
-with another key keeps normal Ctrl shortcuts such as Ctrl+C and Ctrl+W, while
-a standalone tap emits the internal `F24` signal. When the swap is disabled,
-a transparent physical-key release binding preserves normal CapsLock behavior
-while still toggling Voxtype. This option requires the `voxtype` command.
+keyd remaps that physical key to an internal `F24` signal so CapsLock no
+longer toggles case. When the swap is also active, keyd uses
+`overload(control, f24)`: holding the key with another key keeps normal Ctrl
+shortcuts such as Ctrl+C and Ctrl+W, while a standalone tap still toggles
+Voxtype. The original Left Ctrl key becomes CapsLock and is not bound to
+voice. This option requires the `voxtype` command.
 
 ## Boundary and compatibility notes
 
@@ -79,7 +106,7 @@ while still toggling Voxtype. This option requires the `voxtype` command.
 
 ## Uninstallation
 
-Disable or remove the plugin through Omarchy's plugin manager. The plugin removes its runtime integration and restores the original keyboard mapping. It does not remove unrelated Hyprland or keyboard configuration.
+Disable or remove the plugin through Omarchy's plugin manager. Disabling both switches restores the original keyboard mapping (keyd keeps running with an identity-mapping passthrough). Removing the plugin files alone does not revert the system configuration — turn both switches off first. It does not remove unrelated Hyprland or keyboard configuration.
 
 ## Validation
 
@@ -87,6 +114,9 @@ Disable or remove the plugin through Omarchy's plugin manager. The plugin remove
 omarchy plugin validate .
 qmllint -I /usr/share/omarchy/shell bar/widget.qml CtrlSwapPanel.qml
 python3 -m py_compile scripts/ctrl_swap.py
+python3 -m unittest discover -s tests
+# live four-state walk; asks for polkit authentication once per transition
+python3 tests/e2e_four_states.py
 ```
 
 ## License

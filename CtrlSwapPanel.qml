@@ -16,6 +16,7 @@ Panel {
     property bool loading: false
     property bool enabled_: false
     property bool voiceEnabled_: false
+    property bool remapApplied_: true
     property string optionsText: ""
     property string statusText: ""
     property string operation: ""
@@ -48,6 +49,12 @@ Panel {
             root.enabled_ = data.enabled === true;
             root.voiceEnabled_ = data.voiceEnabled === true;
             root.optionsText = data.options || "";
+            root.remapApplied_ = data.remapApplied !== false;
+            if (data.remapApplied === false) {
+                root.statusText = (root.enabled_ || root.voiceEnabled_)
+                    ? "keyd is not running the expected mapping. Toggle a switch once to repair."
+                    : "A stale keyd mapping is still active. Toggle a switch once or re-login to repair.";
+            }
         } catch (error) {
             root.statusText = "Could not read the current keyboard options.";
         }
@@ -116,7 +123,9 @@ Panel {
         root.operation = "swap";
         root.statusText = on
             ? "Installing the hardware remap… Authentication may be requested."
-            : "Removing the hardware remap… Authentication may be requested.";
+            : (root.voiceEnabled_
+                ? "Updating the hardware remap… Authentication may be requested."
+                : "Removing the hardware remap… Authentication may be requested.");
         writeProcess.running = true;
     }
 
@@ -125,7 +134,9 @@ Panel {
         writeProcess.command = ["python3", root.swapTool, on ? "voice-enable" : "voice-disable"];
         root.loading = true;
         root.operation = "voice";
-        root.statusText = on ? "Enabling CapsLock-position dictation…" : "Disabling CapsLock-position dictation…";
+        root.statusText = on
+            ? "Enabling CapsLock-position dictation… Authentication may be requested."
+            : "Disabling CapsLock-position dictation… Authentication may be requested.";
         writeProcess.running = true;
     }
 
@@ -193,8 +204,20 @@ Panel {
                     if (root.statusText === "") root.statusText = "Could not apply the keyboard mapping.";
                 } else {
                     root.statusText = root.operation === "voice"
-                        ? (root.voiceEnabled_ ? "The CapsLock-position key now toggles dictation." : "CapsLock dictation is disabled.")
-                        : (root.enabled_ ? "Hardware Ctrl swap is active." : "The original key mapping is restored.");
+                        ? (root.voiceEnabled_
+                            ? (root.enabled_
+                                ? "Tap the CapsLock-position key for dictation; hold it for Ctrl."
+                                : "The CapsLock-position key now toggles dictation.")
+                            : (root.enabled_
+                                ? "Dictation is off. The CapsLock-position key is Left Ctrl."
+                                : "CapsLock dictation is disabled. CapsLock is restored."))
+                        : (root.enabled_
+                            ? (root.voiceEnabled_
+                                ? "Hardware Ctrl swap is active. Tap the CapsLock-position key for dictation; hold it for Ctrl."
+                                : "Hardware Ctrl swap is active.")
+                            : (root.voiceEnabled_
+                                ? "Ctrl swap is off. CapsLock-position dictation is still active."
+                                : "The original key mapping is restored."));
                 }
                 root.operation = "";
                 clearStatus.restart();
@@ -278,7 +301,9 @@ Panel {
                             elide: Text.ElideRight
                         }
                         Text {
-                            text: (root.enabled_ ? "Hardware remap is active" : "Using the default keyboard mapping").toUpperCase()
+                            text: (root.enabled_
+                                ? "Hardware remap is active"
+                                : (root.voiceEnabled_ ? "Default Ctrl · CapsLock runs dictation" : "Using the default keyboard mapping")).toUpperCase()
                             color: Color.muted
                             font.family: root.bar ? root.bar.fontFamily : Style.font.family
                             font.pixelSize: Style.font.caption
@@ -292,7 +317,7 @@ Panel {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         checked: root.enabled_
-                        busy: root.loading
+                        busy: root.loading && root.operation === "swap"
                         foreground: root.barForeground
                         onToggled: root.setSwap(!root.enabled_)
                     }
@@ -328,7 +353,11 @@ Panel {
                             elide: Text.ElideRight
                         }
                         Text {
-                            text: "Tap the CapsLock-position key to toggle Voxtype".toUpperCase()
+                            text: (!root.voiceEnabled_
+                                ? "Dictation is off"
+                                : (root.enabled_
+                                    ? "Tap for Voxtype · hold with another key for Ctrl"
+                                    : "Tap for Voxtype · CapsLock is consumed")).toUpperCase()
                             color: Color.muted
                             font.family: root.bar ? root.bar.fontFamily : Style.font.family
                             font.pixelSize: Style.font.caption
@@ -352,7 +381,8 @@ Panel {
                     width: parent.width
                     text: root.loading ? "Applying…"
                         : (root.statusText !== "" ? root.statusText
-                            : (root.enabled_ ? "keyd is active." : "keyd remap is disabled."))
+                            : (!root.remapApplied_ ? "keyd does not match the selected state."
+                                : ((root.enabled_ || root.voiceEnabled_) ? "keyd is active." : "keyd is passing keys through.")))
                     color: root.statusText !== "" ? Color.accent : Color.muted
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption

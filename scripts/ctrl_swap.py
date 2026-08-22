@@ -215,6 +215,8 @@ def enable() -> None:
 
 
 def disable() -> None:
+    if VOICE_STATE_FILE.exists():
+        voice_disable()
     apply_keyd(False)
     persist(False)
 
@@ -271,10 +273,12 @@ def voice_disable() -> None:
 
 
 def ensure() -> None:
-    # keyd is a system service and survives shell/Hyprland restarts. Only the
-    # user-level voice binding needs to be restored here.
-    if STATE_FILE.exists() and VOICE_STATE_FILE.exists():
-        voice_enable(False)
+    # keyd is a system service and survives shell/Hyprland restarts, but the
+    # user-level voice binding must be restored independently of the optional
+    # Ctrl/CapsLock swap.  In particular, voice_enabled can remain set when
+    # the swap itself is disabled.
+    if VOICE_STATE_FILE.exists():
+        voice_enable(STATE_FILE.exists())
 
 
 def status() -> None:

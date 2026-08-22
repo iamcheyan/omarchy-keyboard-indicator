@@ -18,6 +18,11 @@ STATE_DIR = pathlib.Path(
 STATE_FILE = STATE_DIR / "enabled"
 KEYD_DEST = pathlib.Path("/etc/keyd/hancore-ctrl-swap.conf")
 KEYD_CACHE = pathlib.Path.home() / ".cache/hancore-ctrl-swap-keyd"
+KEYD_REPOSITORY = "https://github.com/rvaiya/keyd.git"
+# Pin the source that is compiled and installed through pkexec.  The commit
+# hash is the integrity check: a moving branch must never reach the root
+# command that builds keyd.
+KEYD_COMMIT = "f564288ac2b19d2305a5b39023c474805ff8fce5"
 VOICE_STATE_FILE = STATE_DIR / "voice_enabled"
 VOICE_DESCRIPTION = "CapsLock position voice dictation"
 LEGACY_VOICE_DESCRIPTION = "Ctrl Swap voice dictation"
@@ -92,17 +97,47 @@ def ensure_keyd_installed(config_path: pathlib.Path) -> bool:
     if shutil.which("git") is None or shutil.which("make") is None:
         raise RuntimeError("keyd is not installed and git/make are unavailable")
     if not (KEYD_CACHE / ".git").exists():
+        if KEYD_CACHE.exists():
+            raise RuntimeError(f"keyd cache is not a git checkout: {KEYD_CACHE}")
         KEYD_CACHE.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
             [
-                "git", "clone", "--depth", "1",
-                "https://github.com/rvaiya/keyd.git", str(KEYD_CACHE),
+                "git", "clone", "--no-checkout", "--depth", "1",
+                KEYD_REPOSITORY, str(KEYD_CACHE),
             ],
             capture_output=True,
             text=True,
         )
         if result.returncode != 0:
             raise RuntimeError(result.stderr.strip() or "Could not download keyd")
+    fetch = subprocess.run(
+        ["git", "-C", str(KEYD_CACHE), "fetch", "--depth", "1", KEYD_REPOSITORY, KEYD_COMMIT],
+        capture_output=True,
+        text=True,
+    )
+    if fetch.returncode != 0:
+        raise RuntimeError(fetch.stderr.strip() or "Could not fetch the pinned keyd revision")
+    checkout = subprocess.run(
+        ["git", "-C", str(KEYD_CACHE), "checkout", "--force", "--detach", KEYD_COMMIT],
+        capture_output=True,
+        text=True,
+    )
+    if checkout.returncode != 0:
+        raise RuntimeError(checkout.stderr.strip() or "Could not select the pinned keyd revision")
+    revision = subprocess.run(
+        ["git", "-C", str(KEYD_CACHE), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if revision.returncode != 0 or revision.stdout.strip() != KEYD_COMMIT:
+        raise RuntimeError("keyd checkout failed the pinned revision check")
+    status = subprocess.run(
+        ["git", "-C", str(KEYD_CACHE), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+    )
+    if status.returncode != 0 or status.stdout.strip():
+        raise RuntimeError("keyd checkout contains unexpected local changes")
     payload = (
         f"set -eu; make -C {shell_quote(str(KEYD_CACHE))} all; "
         f"make -C {shell_quote(str(KEYD_CACHE))} install; "

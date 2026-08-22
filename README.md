@@ -8,6 +8,7 @@ Keyboard Indicator is an Omarchy experience-enhancement plugin for keyboard rema
 - Independent toggles for the CapsLock/Left Ctrl swap and CapsLock-position Voxtype dictation.
 - Applies to graphical applications, terminals, tmux, SSH sessions, and Hyprland global shortcuts because keyd remaps the input before they receive it.
 - Uses keyd and a small system configuration managed through an explicit `pkexec` authentication prompt.
+- If keyd is missing, the plugin fetches one pinned upstream commit and verifies that exact commit before any privileged build/install step.
 - Remembers the enabled state; keyd continues to run as a system service after shell or Hyprland restarts.
 - Keeps the UI and state management in the user session; privileged work is limited to installing/removing the keyd config.
 

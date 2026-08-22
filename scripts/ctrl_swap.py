@@ -92,7 +92,8 @@ for path in removals:
 if "/usr/local/lib/systemd/system/keyd.service" in files:
     subprocess.run(["systemctl", "daemon-reload"], check=True)
 if payload.get("enable"):
-    subprocess.run(["systemctl", "enable", "--now", "keyd"], check=True)
+    subprocess.run(["systemctl", "enable", "keyd"], check=True)
+    subprocess.run(["systemctl", "restart", "keyd"], check=True)
 elif payload.get("restart"):
     subprocess.run(["systemctl", "restart", "keyd"], check=True)
 '''

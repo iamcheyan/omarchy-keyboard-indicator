@@ -75,7 +75,7 @@ capslock = overload(control, f24)
 leftcontrol = capslock
 ```
 
-The file is installed as `/etc/keyd/hancore-ctrl-swap.conf` after the user approves the `pkexec` prompt. The file carries a schema marker; whenever both switches are off it stays installed with an identity mapping (`capslock = capslock`) so keyd keeps running without changing any behavior, and a config missing the marker is treated as drift and rebuilt. The swap intent is stored at:
+The file is installed as `/etc/keyd/hancore-ctrl-swap.conf` after the user approves the `pkexec` prompt. The file carries a schema marker, and a config missing the marker is treated as drift and rebuilt. Whenever both switches are off the file is **removed** instead of being left behind as an identity mapping: keyd applies exactly one config per device, and `hancore-ctrl-swap.conf` sorts after a hand-written `/etc/keyd/default.conf`, so an installed `capslock = capslock` would win the match and void every mapping the user maintains for that keyboard. keyd is restarted, not stopped, so any other config it serves keeps working. The swap intent is stored at:
 
 ```text
 ~/.local/state/hancore.keyboard-center/enabled
@@ -106,7 +106,7 @@ voice. This option requires the `voxtype` command.
 
 ## Uninstallation
 
-Disable or remove the plugin through Omarchy's plugin manager. Disabling both switches restores the original keyboard mapping (keyd keeps running with an identity-mapping passthrough). Removing the plugin files alone does not revert the system configuration — turn both switches off first. It does not remove unrelated Hyprland or keyboard configuration.
+Disable or remove the plugin through Omarchy's plugin manager. Disabling both switches restores the original keyboard mapping by removing `/etc/keyd/hancore-ctrl-swap.conf`, which hands the device back to whatever keyd config the user maintains. Removing the plugin files alone does not revert the system configuration — turn both switches off first. It does not remove unrelated Hyprland or keyboard configuration.
 
 ## Validation
 

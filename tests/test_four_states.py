@@ -14,6 +14,7 @@ replaced with a recorder. The tests pin the observable contract:
 from __future__ import annotations
 
 import json
+import inspect
 import pathlib
 import sys
 import tempfile
@@ -47,6 +48,17 @@ class FourStateTestBase(unittest.TestCase):
 
 
 class ConfigMatrixTest(FourStateTestBase):
+    def test_keyd_source_requires_a_full_commit_and_never_clones_head(self):
+        self.assertEqual(ctrl_swap.pinned_keyd_commit(), ctrl_swap.KEYD_COMMIT)
+        source = inspect.getsource(ctrl_swap.ensure_keyd_installed)
+        self.assertNotIn('"clone"', source)
+        self.assertIn('"fetch"', source)
+        self.assertIn("pinned_keyd_commit", source)
+
+        with mock.patch.object(ctrl_swap, "KEYD_COMMIT", "main"):
+            with self.assertRaisesRegex(RuntimeError, "40-character commit SHA"):
+                ctrl_swap.pinned_keyd_commit()
+
     def test_exact_configs_for_all_four_states(self):
         expected = {
             (False, False): "capslock = capslock\n",

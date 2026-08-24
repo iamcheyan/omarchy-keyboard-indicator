@@ -8,6 +8,7 @@ import fcntl
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -20,9 +21,8 @@ STATE_DIR = pathlib.Path(
 STATE_FILE = STATE_DIR / "enabled"
 KEYD_DEST = pathlib.Path("/etc/keyd/hancore-ctrl-swap.conf")
 KEYD_REPOSITORY = "https://github.com/rvaiya/keyd.git"
-# Pin the source that is compiled and installed through pkexec.  The commit
-# hash is the integrity check: a moving branch must never reach the root
-# command that builds keyd.
+# Pin the source compiled without privileges. The commit hash is the integrity
+# check; pkexec receives only the resulting artifact bytes for installation.
 KEYD_COMMIT = "f564288ac2b19d2305a5b39023c474805ff8fce5"
 CONFIG_SCHEMA = "hancore keyboard-center four-state/2"
 VOICE_STATE_FILE = STATE_DIR / "voice_enabled"
@@ -164,34 +164,48 @@ def keyd_config_matches(swap: bool, voice: bool) -> bool:
     )
 
 
+def pinned_keyd_commit() -> str:
+    if re.fullmatch(r"[0-9a-fA-F]{40}", KEYD_COMMIT) is None:
+        raise RuntimeError("KEYD_COMMIT must be a full 40-character commit SHA")
+    return KEYD_COMMIT.lower()
+
+
 def ensure_keyd_installed(config_path: pathlib.Path) -> bool:
     if shutil.which("keyd") is not None:
         return False
     if shutil.which("git") is None or shutil.which("make") is None:
         raise RuntimeError("keyd is not installed and git/make are unavailable")
+    commit = pinned_keyd_commit()
     with tempfile.TemporaryDirectory(prefix="hancore-keyd-") as temp_dir:
         checkout_dir = pathlib.Path(temp_dir) / "keyd"
-        clone = subprocess.run(
-            ["git", "clone", "--no-checkout", "--depth", "1", KEYD_REPOSITORY, str(checkout_dir)],
+        initialize = subprocess.run(
+            ["git", "init", str(checkout_dir)],
             capture_output=True,
             text=True,
         )
-        if clone.returncode != 0:
-            raise RuntimeError(clone.stderr.strip() or "Could not download keyd")
+        if initialize.returncode != 0:
+            raise RuntimeError(initialize.stderr.strip() or "Could not initialize the keyd checkout")
         fetch = subprocess.run(
-            ["git", "-C", str(checkout_dir), "fetch", "--depth", "1", KEYD_REPOSITORY, KEYD_COMMIT],
+            ["git", "-C", str(checkout_dir), "fetch", "--depth", "1", KEYD_REPOSITORY, commit],
             capture_output=True,
             text=True,
         )
         if fetch.returncode != 0:
             raise RuntimeError(fetch.stderr.strip() or "Could not fetch the pinned keyd revision")
         checkout = subprocess.run(
-            ["git", "-C", str(checkout_dir), "checkout", "--force", "--detach", KEYD_COMMIT],
+            ["git", "-C", str(checkout_dir), "checkout", "--force", "--detach", commit],
             capture_output=True,
             text=True,
         )
         if checkout.returncode != 0:
             raise RuntimeError(checkout.stderr.strip() or "Could not select the pinned keyd revision")
+        resolved = subprocess.run(
+            ["git", "-C", str(checkout_dir), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        if resolved.returncode != 0 or resolved.stdout.strip().lower() != commit:
+            raise RuntimeError("The fetched keyd revision does not match KEYD_COMMIT")
         status = subprocess.run(
             ["git", "-C", str(checkout_dir), "status", "--porcelain", "--untracked-files=all"],
             capture_output=True,
@@ -199,7 +213,7 @@ def ensure_keyd_installed(config_path: pathlib.Path) -> bool:
         )
         if status.returncode != 0 or status.stdout.strip():
             raise RuntimeError("keyd checkout contains unexpected local changes")
-        build = subprocess.run(["make", "-C", str(checkout_dir), "all"], capture_output=True, text=True)
+        build = subprocess.run(["make", "all"], cwd=checkout_dir, capture_output=True, text=True)
         if build.returncode != 0:
             raise RuntimeError(build.stderr.strip() or "Could not build keyd")
         files = {

@@ -7,6 +7,11 @@
 
 Keyboard Indicator is an Omarchy experience-enhancement plugin for keyboard remapping, independent per-key Voxtype dictation, Fcitx5 input methods, and XKB keyboard layouts.
 
+## Marketplace
+
+Keyboard Indicator has been approved and verified in the Omarchy plugin marketplace:
+[open the published marketplace page](https://omarchyplugins.com/plugin.html?id=hancore.keyboard-center).
+
 ## Features
 
 - Native Omarchy top-bar widget and settings panel.

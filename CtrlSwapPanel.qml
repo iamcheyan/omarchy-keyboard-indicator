@@ -34,6 +34,9 @@ Panel {
     property var keyboardLayoutOptions: []
     property string currentKeyboardLayout: ""
     property var keyboardLayoutNames: ({})
+    readonly property color panelForeground: Color.popups.text
+    readonly property color panelBackground: Color.popups.background
+    readonly property color panelMuted: Util.alpha(Color.popups.text, 0.58)
 
     function open() { root.controller.show(); refresh(); }
     function close() { root.controller.hide(); }
@@ -263,8 +266,8 @@ Panel {
                     label: "Input Method · " + root.inputMethodName + (root.inputMethodVariant !== "" ? " · " + root.inputMethodVariant : "")
                     value: root.inputSelectionValue
                     options: root.inputDropdownOptions
-                    foreground: root.barForeground
-                    background: Color.background
+                    foreground: root.panelForeground
+                    background: root.panelBackground
                     accent: Color.accent
                     onChanged: function(value) { root.setInputSchema(value); }
                 }
@@ -275,8 +278,8 @@ Panel {
                     label: "Keyboard Layout"
                     value: root.currentKeyboardLayout
                     options: root.keyboardLayoutOptions
-                    foreground: root.barForeground
-                    background: Color.background
+                    foreground: root.panelForeground
+                    background: root.panelBackground
                     accent: Color.accent
                     onChanged: function(value) { root.setKeyboardLayout(value); }
                 }
@@ -290,7 +293,7 @@ Panel {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         text: "󰌌"
-                        color: root.barForeground
+                        color: root.panelForeground
                         horizontalAlignment: Text.AlignHCenter
                         font.family: root.bar ? root.bar.fontFamily : Style.font.family
                         font.pixelSize: Style.font.iconLarge
@@ -304,7 +307,7 @@ Panel {
                         spacing: Style.space(2)
                         Text {
                             text: "Swap CapsLock and Left Ctrl"
-                            color: root.barForeground
+                            color: root.panelForeground
                             font.family: root.bar ? root.bar.fontFamily : Style.font.family
                             font.pixelSize: Style.font.body
                             font.bold: true
@@ -314,7 +317,7 @@ Panel {
                             text: (root.enabled_
                                 ? "Hardware remap is active"
                                 : (root.voiceEnabled_ ? "Default Ctrl · CapsLock runs dictation" : "Using the default keyboard mapping")).toUpperCase()
-                            color: Color.muted
+                            color: root.panelMuted
                             font.family: root.bar ? root.bar.fontFamily : Style.font.family
                             font.pixelSize: Style.font.caption
                             font.bold: true
@@ -328,7 +331,7 @@ Panel {
                         anchors.verticalCenter: parent.verticalCenter
                         checked: root.enabled_
                         busy: root.loading && root.operation === "swap"
-                        foreground: root.barForeground
+                        foreground: root.panelForeground
                         onToggled: root.setSwap(!root.enabled_)
                     }
                 }
@@ -352,7 +355,7 @@ Panel {
                                 anchors.left: parent.left
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: "󰍬"
-                                color: root.barForeground
+                                color: root.panelForeground
                                 horizontalAlignment: Text.AlignHCenter
                                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                                 font.pixelSize: Style.font.iconLarge
@@ -366,7 +369,7 @@ Panel {
                                 spacing: Style.space(2)
                                 Text {
                                     text: modelData.title
-                                    color: root.barForeground
+                                    color: root.panelForeground
                                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                                     font.pixelSize: Style.font.body
                                     font.bold: true
@@ -376,7 +379,7 @@ Panel {
                                     text: root.voiceEnabledFor(modelData.key)
                                         ? "Tap to toggle Voxtype; hold with another key for Ctrl"
                                         : "Dictation is off"
-                                    color: Color.muted
+                                    color: root.panelMuted
                                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                                     font.pixelSize: Style.font.caption
                                     font.bold: true
@@ -390,7 +393,7 @@ Panel {
                                 anchors.verticalCenter: parent.verticalCenter
                                 checked: root.voiceEnabledFor(modelData.key)
                                 busy: root.loading && root.operation === "voice" && root.pendingVoiceKey === modelData.key
-                                foreground: root.barForeground
+                                foreground: root.panelForeground
                                 onToggled: root.setVoice(modelData.key, !root.voiceEnabledFor(modelData.key))
                             }
                         }
@@ -403,7 +406,7 @@ Panel {
                         : (root.statusText !== "" ? root.statusText
                             : (!root.remapApplied_ ? "keyd does not match the selected state."
                                 : ((root.enabled_ || root.voiceEnabled_) ? "keyd is active." : "keyd is passing keys through.")))
-                    color: root.statusText !== "" ? Color.accent : Color.muted
+                    color: root.statusText !== "" ? Color.accent : root.panelMuted
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption
                     wrapMode: Text.WordWrap

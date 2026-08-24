@@ -1,5 +1,10 @@
 # Keyboard Indicator
 
+## 0.4.2
+
+- Adapted the settings panel text, dropdowns, and controls to Omarchy popup
+  theme tokens so light and dark themes keep readable contrast.
+
 Keyboard Indicator is an Omarchy experience-enhancement plugin for keyboard remapping, independent per-key Voxtype dictation, Fcitx5 input methods, and XKB keyboard layouts.
 
 ## Features

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.keyboard-center",
   "name": "Keyboard Indicator",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Unified Omarchy keyboard center for CapsLock/Ctrl remapping, independent CapsLock/Left Ctrl/Right Ctrl Voxtype dictation, Fcitx5 input methods, and keyboard layouts.",

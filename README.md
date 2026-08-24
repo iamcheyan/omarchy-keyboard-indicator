@@ -76,7 +76,7 @@ capslock = overload(control, f24)
 leftcontrol = overload(control, f24)
 ```
 
-The file is installed as `/etc/keyd/hancore-ctrl-swap.conf` after the user approves the `pkexec` prompt. The file carries a schema marker; whenever both switches are off it stays installed with an identity mapping (`capslock = capslock`) so keyd keeps running without changing any behavior, and a config missing the marker is treated as drift and rebuilt. The swap intent is stored at:
+The file is installed as `/etc/keyd/hancore-ctrl-swap.conf` after the user approves the `pkexec` prompt. The file carries a schema marker, and a config missing the marker is treated as drift and rebuilt. When the swap and all three dictation switches are off, the file is removed instead of leaving an identity mapping: keyd applies one wildcard config per device, so our file could otherwise override the user's own `/etc/keyd/default.conf` and discard unrelated mappings. keyd is restarted so the user's configuration can take over again. The swap intent is stored at:
 
 ```text
 ~/.local/state/hancore.keyboard-center/enabled
@@ -106,7 +106,7 @@ key's voice mapping. These options require the `voxtype` command.
 
 ## Uninstallation
 
-Disable or remove the plugin through Omarchy's plugin manager. Disabling both switches restores the original keyboard mapping (keyd keeps running with an identity-mapping passthrough). Removing the plugin files alone does not revert the system configuration — turn both switches off first. It does not remove unrelated Hyprland or keyboard configuration.
+Disable or remove the plugin through Omarchy's plugin manager. Disabling all switches restores the original keyboard mapping by removing `/etc/keyd/hancore-ctrl-swap.conf`, handing the device back to the user's own keyd configuration. Removing the plugin files alone does not revert the system configuration — turn all switches off first. It does not remove unrelated Hyprland or keyboard configuration.
 
 ## Validation
 

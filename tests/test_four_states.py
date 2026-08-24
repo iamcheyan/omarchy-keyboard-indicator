@@ -66,7 +66,6 @@ class ConfigMatrixTest(FourStateTestBase):
 
     def test_exact_configs_for_all_four_states(self):
         expected = {
-            (False, False): "capslock = capslock\n",
             (False, True): "capslock = f24\n",
             (True, False): "capslock = layer(control)\nleftcontrol = capslock\n",
             (True, True): "capslock = overload(control, f24)\nleftcontrol = capslock\n",
@@ -78,9 +77,19 @@ class ConfigMatrixTest(FourStateTestBase):
                 config.endswith(f"[main]\n{mapping}"),
                 f"unexpected body for swap={swap} voice={voice}: {config!r}",
             )
-        # the four states must produce four distinct bodies
+        # the three mapped states must remain distinct; neutral has no file.
         bodies = {ctrl_swap.keyd_config(s, v) for s, v in expected}
-        self.assertEqual(len(bodies), 4)
+        self.assertEqual(len(bodies), 3)
+        self.assertIsNone(ctrl_swap.keyd_config(False, False))
+
+    def test_neutral_state_requires_our_file_to_be_absent(self):
+        self.assertTrue(ctrl_swap.keyd_config_matches(False, False))
+        self.keyd_dest.write_text(ctrl_swap.keyd_config(True, False))
+        self.assertFalse(ctrl_swap.keyd_config_matches(False, False))
+
+    def test_neutral_state_does_not_require_keyd(self):
+        with mock.patch.object(ctrl_swap, "_keyd_is_active", return_value=False):
+            self.assertTrue(ctrl_swap.remap_is_live(False, False))
 
     def test_matches_requires_schema_marker(self):
         good = ctrl_swap.keyd_config(False, True)
@@ -178,6 +187,27 @@ class SyncOrderTest(FourStateTestBase):
         with mock.patch.object(ctrl_swap, "sync") as sync_mock:
             ctrl_swap.disable()
         sync_mock.assert_called_once_with(False, set(), force=True)
+
+
+class ApplyKeydTest(FourStateTestBase):
+    def test_neutral_apply_removes_our_config(self):
+        self.keyd_dest.write_text(ctrl_swap.keyd_config(True, False))
+        with mock.patch.object(
+            ctrl_swap, "root_command",
+            side_effect=lambda *args, **kwargs: self.keyd_dest.unlink(missing_ok=True),
+        ) as root, mock.patch.object(ctrl_swap, "ensure_keyd_installed") as install, \
+                mock.patch.object(ctrl_swap, "_keyd_unit_busy", return_value=True):
+            ctrl_swap._apply_keyd_unlocked(False, False, force=True)
+        install.assert_not_called()
+        root.assert_called_once_with(remove=(str(self.keyd_dest),), restart=True)
+        self.assertFalse(self.keyd_dest.exists())
+
+    def test_neutral_apply_does_not_prompt_when_already_clean(self):
+        with mock.patch.object(ctrl_swap, "root_command") as root, \
+                mock.patch.object(ctrl_swap, "ensure_keyd_installed") as install:
+            ctrl_swap._apply_keyd_unlocked(False, False, force=True)
+        root.assert_not_called()
+        install.assert_not_called()
 
 
 class VoiceBindTest(FourStateTestBase):

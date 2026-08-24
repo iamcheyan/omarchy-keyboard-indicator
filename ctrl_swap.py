@@ -147,7 +147,7 @@ def voice_state_keys() -> set[str]:
     return {key for key, path in VOICE_STATE_FILES.items() if path.exists()}
 
 
-def keyd_config(swap: bool = False, voice: bool | set[str] = False, *, voice_keys: set[str] | None = None) -> str:
+def keyd_config(swap: bool = False, voice: bool | set[str] = False, *, voice_keys: set[str] | None = None) -> str | None:
     # Each voice key is independent. A standalone tap emits F24 for Voxtype;
     # overload(control, f24) keeps Ctrl chords intact for either Ctrl key.
     selected = _voice_keys(voice, voice_keys)
@@ -161,6 +161,11 @@ def keyd_config(swap: bool = False, voice: bool | set[str] = False, *, voice_key
         mapping["leftcontrol"] = "overload(control, f24)"
     if "rightcontrol" in selected:
         mapping["rightcontrol"] = "overload(control, f24)"
+    if not swap and not selected:
+        # keyd applies exactly one config per device. Leaving our wildcard
+        # config installed in the neutral state could override the user's
+        # own /etc/keyd/default.conf and discard unrelated mappings.
+        return None
     body = "\n".join(
         f"{key} = {value}" for key, value in mapping.items() if value is not None
     ) + "\n"
@@ -182,6 +187,10 @@ def _normalize_keyd(value: str) -> str:
 
 
 def keyd_config_matches(swap: bool, voice: bool | set[str], *, voice_keys: set[str] | None = None) -> bool:
+    expected = keyd_config(swap, voice, voice_keys=voice_keys)
+    if expected is None:
+        # Neutral means this plugin owns no keyd configuration.
+        return not KEYD_DEST.exists()
     try:
         current = KEYD_DEST.read_text()
     except OSError:
@@ -189,7 +198,7 @@ def keyd_config_matches(swap: bool, voice: bool | set[str], *, voice_keys: set[s
     # A config without the schema marker was written by a different
     # generation of this plugin; treat it as drift and rebuild.
     return CONFIG_SCHEMA in current and (
-        _normalize_keyd(current) == _normalize_keyd(keyd_config(swap, voice, voice_keys=voice_keys))
+        _normalize_keyd(current) == _normalize_keyd(expected)
     )
 
 
@@ -276,6 +285,9 @@ def _keyd_unit_busy() -> bool:
 
 
 def remap_is_live(swap: bool, voice: bool | set[str]) -> bool:
+    if keyd_config(swap, voice) is None:
+        # keyd may still be serving the user's own configurations.
+        return keyd_config_matches(swap, voice)
     return keyd_config_matches(swap, voice) and _keyd_is_active()
 
 
@@ -289,10 +301,18 @@ def _apply_keyd_unlocked(swap: bool, voice: bool | set[str], *, force: bool = Fa
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     if not force and remap_is_live(swap, voice):
         return
-    config_path.write_text(keyd_config(swap, voice))
-    freshly_installed = ensure_keyd_installed(config_path)
-    if not freshly_installed:
-        root_command({str(KEYD_DEST): config_path.read_bytes()}, enable=True)
+    config = keyd_config(swap, voice)
+    if config is None:
+        # Remove our wildcard config instead of installing an identity map.
+        # Restart keyd so any user-owned config can become active again.
+        config_path.unlink(missing_ok=True)
+        if KEYD_DEST.exists():
+            root_command(remove=(str(KEYD_DEST),), restart=_keyd_unit_busy())
+    else:
+        config_path.write_text(config)
+        freshly_installed = ensure_keyd_installed(config_path)
+        if not freshly_installed:
+            root_command({str(KEYD_DEST): config_path.read_bytes()}, enable=True)
     if not remap_is_live(swap, voice):
         raise RuntimeError("keyd is not running the requested remap")
 

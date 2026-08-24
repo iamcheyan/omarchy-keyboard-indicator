@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "hancore.keyboard-center",
   "name": "Keyboard Indicator",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "author": "HANCORE",
   "license": "MIT",
-  "description": "Unified Omarchy keyboard center for CapsLock/Ctrl remapping, CapsLock-position Voxtype dictation, Fcitx5 input methods, and keyboard layouts.",
+  "description": "Unified Omarchy keyboard center for CapsLock/Ctrl remapping, independent CapsLock/Left Ctrl/Right Ctrl Voxtype dictation, Fcitx5 input methods, and keyboard layouts.",
   "keepLoaded": true,
   "kinds": ["bar-widget"],
   "entryPoints": {
@@ -13,7 +13,7 @@
   },
   "barWidget": {
     "displayName": "Keyboard Indicator",
-    "description": "Show and manage keyboard remapping, CapsLock-position dictation, Fcitx5 input methods, and XKB keyboard layouts from the top bar.",
+    "description": "Show and manage keyboard remapping, independent per-key dictation, Fcitx5 input methods, and XKB keyboard layouts from the top bar.",
     "category": "Desktop",
     "allowMultiple": false,
     "defaultSection": "right"

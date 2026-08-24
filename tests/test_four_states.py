@@ -37,6 +37,11 @@ class FourStateTestBase(unittest.TestCase):
             mock.patch.object(ctrl_swap, "STATE_DIR", self.state_dir),
             mock.patch.object(ctrl_swap, "STATE_FILE", self.state_dir / "enabled"),
             mock.patch.object(ctrl_swap, "VOICE_STATE_FILE", self.state_dir / "voice_enabled"),
+            mock.patch.object(ctrl_swap, "VOICE_STATE_FILES", {
+                "capslock": self.state_dir / "voice_enabled",
+                "leftcontrol": self.state_dir / "voice_leftcontrol_enabled",
+                "rightcontrol": self.state_dir / "voice_rightcontrol_enabled",
+            }),
             mock.patch.object(ctrl_swap, "KEYD_DEST", self.keyd_dest),
         ]
         for patcher in patchers:
@@ -86,6 +91,20 @@ class ConfigMatrixTest(FourStateTestBase):
             self.keyd_dest.write_text(content)
             self.assertEqual(ctrl_swap.keyd_config_matches(False, True), want, content)
         self.assertFalse(ctrl_swap.keyd_config_matches(False, True))  # missing file
+
+    def test_each_voice_key_has_an_independent_mapping(self):
+        self.assertIn(
+            "leftcontrol = overload(control, f24)\n",
+            ctrl_swap.keyd_config(False, voice_keys={"leftcontrol"}),
+        )
+        self.assertIn(
+            "rightcontrol = overload(control, f24)\n",
+            ctrl_swap.keyd_config(False, voice_keys={"rightcontrol"}),
+        )
+        self.assertNotIn(
+            "rightcontrol = overload(control, f24)",
+            ctrl_swap.keyd_config(False, voice_keys={"leftcontrol"}),
+        )
 
     def test_matches_ignores_comments(self):
         good = ctrl_swap.keyd_config(True, False)
@@ -153,12 +172,12 @@ class SyncOrderTest(FourStateTestBase):
         with mock.patch.object(ctrl_swap, "sync") as sync_mock, \
              mock.patch.object(ctrl_swap, "clear_legacy_xkb_swap"):
             ctrl_swap.enable()
-        sync_mock.assert_called_once_with(True, True, force=True)
+        sync_mock.assert_called_once_with(True, {"capslock"}, force=True)
 
     def test_disable_passes_current_voice_state_with_force(self):
         with mock.patch.object(ctrl_swap, "sync") as sync_mock:
             ctrl_swap.disable()
-        sync_mock.assert_called_once_with(False, False, force=True)
+        sync_mock.assert_called_once_with(False, set(), force=True)
 
 
 class VoiceBindTest(FourStateTestBase):

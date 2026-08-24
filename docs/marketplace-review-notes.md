@@ -37,8 +37,21 @@
 | 1 | moving-HEAD clone → root 构建 | `03a2e04`：pin `f564288a` + 校验 HEAD 与干净 checkout |
 | 2 | 校验后把用户可写路径传给 pkexec 跑 make（TOCTOU） | `8447a0f`：临时目录非特权构建，pkexec 只收 base64 字节 + 固定内联安装器 + 目的地白名单 |
 
-**待办**：2026-08-22 的四态重构（sync 单入口、schema 代际标记、QML 修复、单测/E2E）尚未提交推送；
-`scripts/__pycache__/*.pyc` 被误提交且无 `.gitignore`。推送后需在 #1468 评论新 commit。
+### 最新提审更新（2026-08-24）
+
+本轮提交将语音触发从单一 CapsLock 选项扩展为三个彼此独立的开关：
+
+- CapsLock dictation；
+- Left Ctrl dictation；
+- Right Ctrl dictation。
+
+每个开关分别保存状态并生成 keyd 映射，关闭或开启其中一个不会改变另外两个。
+Left/Right Ctrl 使用 `overload(control, f24)`，单击触发 Voxtype，按住并组合其它
+按键仍保留正常 Ctrl 快捷键。原有 CapsLock/Left Ctrl 交换开关、提权边界、状态机
+事务顺序和 F24 Hyprland 绑定保持不变。
+
+同时更新了面板、英文/中文说明、schema 代际标记和独立映射回归测试。版本更新为
+`0.4.1`。请审核方按最新 HEAD 重新运行 marketplace validation 并复审本轮功能。
 
 ## 四、本仓库对照自查要点
 
@@ -46,6 +59,6 @@
 - [x] keyd 源码 pin 到 immutable commit，非特权构建
 - [x] 提权仅由用户切换开关触发，无后台静默提权
 - [x] keyd 配置带 schema 代际标记，漂移可检测
-- [ ] 提交并推送全部本地修复（含版本 0.4.0）
-- [ ] 清理 `__pycache__` 入库问题，加 `.gitignore`
+- [x] 提交并推送全部本地修复（版本 0.4.1）
+- [x] `.gitignore` 排除 `__pycache__/` 和 `*.pyc`
 - [ ] README 的 systemctl/pkexec 描述与最终实现保持一致（审核基线按行引用）

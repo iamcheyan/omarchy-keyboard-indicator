@@ -1,11 +1,11 @@
 # Keyboard Indicator
 
-Keyboard Indicator is an Omarchy experience-enhancement plugin for keyboard remapping, CapsLock-position dictation, Fcitx5 input methods, and XKB keyboard layouts.
+Keyboard Indicator is an Omarchy experience-enhancement plugin for keyboard remapping, independent per-key Voxtype dictation, Fcitx5 input methods, and XKB keyboard layouts.
 
 ## Features
 
 - Native Omarchy top-bar widget and settings panel.
-- Independent toggles for the CapsLock/Left Ctrl swap and CapsLock-position Voxtype dictation.
+- Independent toggles for the CapsLock/Left Ctrl swap and separate CapsLock, Left Ctrl, and Right Ctrl Voxtype dictation.
 - Applies to graphical applications, terminals, tmux, SSH sessions, and Hyprland global shortcuts because keyd remaps the input before they receive it.
 - Uses keyd and a small system configuration managed through an explicit `pkexec` authentication prompt.
 - If keyd is missing, the plugin fetches one pinned upstream commit, verifies it, and builds it as the user. The privileged step receives only the resulting binaries and installs them; it never executes the downloaded Makefile.
@@ -24,7 +24,7 @@ The plugin automatically reapplies the selected state when the Omarchy shell sta
 
 ## Interface
 
-The default panel puts the active input method and keyboard layout first, followed by the optional keyboard remap and CapsLock-position dictation switches.
+The default panel puts the active input method and keyboard layout first, followed by the optional keyboard remap and three independent dictation switches.
 
 ![Keyboard Indicator default panel](screenshot-2026-08-22_17-41-44.png)
 
@@ -38,10 +38,10 @@ _Expanded input-method selector._
 
 ## How it works
 
-keyd stays installed whenever the Ctrl swap, CapsLock-position dictation, or
-both are on. The generated configuration depends on the two independent
-switches. Voice always occupies the physical CapsLock key (left of A); the
-swap never moves dictation to the original Left Ctrl key.
+keyd stays installed whenever the Ctrl swap or any dictation switch is on.
+The generated configuration depends on the four independent controls. Each
+enabled voice key uses a standalone tap to toggle Voxtype; holding either Ctrl
+key with another key keeps normal Ctrl shortcuts working.
 
 Swap only:
 
@@ -62,6 +62,7 @@ Dictation only (CapsLock is consumed, so it no longer toggles case):
 
 [main]
 capslock = f24
+leftcontrol = overload(control, f24)
 ```
 
 Swap and dictation together (tap = Voxtype, hold with another key = Ctrl):
@@ -72,7 +73,7 @@ Swap and dictation together (tap = Voxtype, hold with another key = Ctrl):
 
 [main]
 capslock = overload(control, f24)
-leftcontrol = capslock
+leftcontrol = overload(control, f24)
 ```
 
 The file is installed as `/etc/keyd/hancore-ctrl-swap.conf` after the user approves the `pkexec` prompt. The file carries a schema marker; whenever both switches are off it stays installed with an identity mapping (`capslock = capslock`) so keyd keeps running without changing any behavior, and a config missing the marker is treated as drift and rebuilt. The swap intent is stored at:
@@ -81,26 +82,25 @@ The file is installed as `/etc/keyd/hancore-ctrl-swap.conf` after the user appro
 ~/.local/state/hancore.keyboard-center/enabled
 ```
 
-## Optional CapsLock-position dictation
+## Optional per-key dictation
 
-The second panel switch occupies the physical key in the CapsLock position.
-Press and release that key by itself to run Omarchy's standard Voxtype
-toggle command:
+The panel provides separate switches for CapsLock, Left Ctrl, and Right Ctrl.
+Each enabled key runs Omarchy's standard Voxtype toggle command when pressed
+and released by itself:
 
 ```text
 voxtype record toggle
 ```
 
-keyd remaps that physical key to an internal `F24` signal so CapsLock no
-longer toggles case. When the swap is also active, keyd uses
-`overload(control, f24)`: holding the key with another key keeps normal Ctrl
-shortcuts such as Ctrl+C and Ctrl+W, while a standalone tap still toggles
-Voxtype. The original Left Ctrl key becomes CapsLock and is not bound to
-voice. This option requires the `voxtype` command.
+keyd remaps enabled voice keys to an internal `F24` signal. Left and Right Ctrl
+use `overload(control, f24)` so holding either key with another key preserves
+shortcuts such as Ctrl+C and Ctrl+W. Disabling one switch removes only that
+key's voice mapping. These options require the `voxtype` command.
 
 ## Boundary and compatibility notes
 
-- Only Left Ctrl and CapsLock are swapped. Right Ctrl is unchanged.
+- Only Left Ctrl and CapsLock are swapped. Right Ctrl is never part of the swap,
+  but it can independently be assigned to Voxtype.
 - This plugin requires one-time administrator authentication when keyd is first installed, and authentication again when the system config is changed.
 - It does not install a permissive Polkit rule; authentication is handled by the normal desktop Polkit agent.
 
@@ -115,7 +115,7 @@ omarchy plugin validate .
 qmllint -I /usr/share/omarchy/shell bar/widget.qml CtrlSwapPanel.qml
 python3 -m py_compile scripts/ctrl_swap.py
 python3 -m unittest discover -s tests
-# live four-state walk; asks for polkit authentication once per transition
+# live state walk; asks for polkit authentication once per transition
 python3 tests/e2e_four_states.py
 ```
 

@@ -16,10 +16,14 @@ Panel {
     property bool loading: false
     property bool enabled_: false
     property bool voiceEnabled_: false
+    property bool voiceCapslockEnabled_: false
+    property bool voiceLeftControlEnabled_: false
+    property bool voiceRightControlEnabled_: false
     property bool remapApplied_: true
     property string optionsText: ""
     property string statusText: ""
     property string operation: ""
+    property string pendingVoiceKey: ""
     property string inputMethodName: "Unavailable"
     property string inputMethodVariant: "Fcitx5 is not running"
     property string inputSchema: ""
@@ -48,6 +52,9 @@ Panel {
             }
             root.enabled_ = data.enabled === true;
             root.voiceEnabled_ = data.voiceEnabled === true;
+            root.voiceCapslockEnabled_ = data.voiceCapslockEnabled === true;
+            root.voiceLeftControlEnabled_ = data.voiceLeftControlEnabled === true;
+            root.voiceRightControlEnabled_ = data.voiceRightControlEnabled === true;
             root.optionsText = data.options || "";
             root.remapApplied_ = data.remapApplied !== false;
             if (data.remapApplied === false) {
@@ -129,14 +136,22 @@ Panel {
         writeProcess.running = true;
     }
 
-    function setVoice(on) {
+    function voiceEnabledFor(key) {
+        if (key === "capslock") return root.voiceCapslockEnabled_;
+        if (key === "leftcontrol") return root.voiceLeftControlEnabled_;
+        if (key === "rightcontrol") return root.voiceRightControlEnabled_;
+        return false;
+    }
+
+    function setVoice(key, on) {
         if (writeProcess.running) return;
-        writeProcess.command = ["python3", root.swapTool, on ? "voice-enable" : "voice-disable"];
+        writeProcess.command = ["python3", root.swapTool, on ? "voice-enable" : "voice-disable", key];
         root.loading = true;
         root.operation = "voice";
+        root.pendingVoiceKey = key;
         root.statusText = on
-            ? "Enabling CapsLock-position dictation… Authentication may be requested."
-            : "Disabling CapsLock-position dictation… Authentication may be requested.";
+            ? "Enabling " + key + " dictation… Authentication may be requested."
+            : "Disabling " + key + " dictation… Authentication may be requested.";
         writeProcess.running = true;
     }
 
@@ -204,22 +219,17 @@ Panel {
                     if (root.statusText === "") root.statusText = "Could not apply the keyboard mapping.";
                 } else {
                     root.statusText = root.operation === "voice"
-                        ? (root.voiceEnabled_
-                            ? (root.enabled_
-                                ? "Tap the CapsLock-position key for dictation; hold it for Ctrl."
-                                : "The CapsLock-position key now toggles dictation.")
-                            : (root.enabled_
-                                ? "Dictation is off. The CapsLock-position key is Left Ctrl."
-                                : "CapsLock dictation is disabled. CapsLock is restored."))
+                        ? "Dictation key settings updated."
                         : (root.enabled_
                             ? (root.voiceEnabled_
-                                ? "Hardware Ctrl swap is active. Tap the CapsLock-position key for dictation; hold it for Ctrl."
+                                ? "Hardware Ctrl swap is active. Tap CapsLock or Ctrl for dictation; hold either for Ctrl."
                                 : "Hardware Ctrl swap is active.")
                             : (root.voiceEnabled_
-                                ? "Ctrl swap is off. CapsLock-position dictation is still active."
+                                ? "Ctrl swap is off. CapsLock/Ctrl dictation is still active."
                                 : "The original key mapping is restored."));
                 }
                 root.operation = "";
+                root.pendingVoiceKey = "";
                 clearStatus.restart();
             }
         }
@@ -323,57 +333,67 @@ Panel {
                     }
                 }
 
-                Item {
+                Column {
                     width: parent.width
-                    height: Style.space(40)
+                    spacing: Style.space(6)
+                    Repeater {
+                        model: [
+                            { key: "capslock", title: "CapsLock dictation" },
+                            { key: "leftcontrol", title: "Left Ctrl dictation" },
+                            { key: "rightcontrol", title: "Right Ctrl dictation" }
+                        ]
+                        delegate: Item {
+                            required property var modelData
+                            width: parent.width
+                            height: Style.space(40)
 
-                    Text {
-                        width: Style.space(32)
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "󰍬"
-                        color: root.barForeground
-                        horizontalAlignment: Text.AlignHCenter
-                        font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                        font.pixelSize: Style.font.iconLarge
-                    }
-                    Column {
-                        anchors.left: parent.left
-                        anchors.leftMargin: Style.space(48)
-                        anchors.right: voiceToggle.left
-                        anchors.rightMargin: Style.space(12)
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Style.space(2)
-                        Text {
-                            text: "CapsLock dictation"
-                            color: root.barForeground
-                            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                            font.pixelSize: Style.font.body
-                            font.bold: true
-                            elide: Text.ElideRight
+                            Text {
+                                width: Style.space(32)
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "󰍬"
+                                color: root.barForeground
+                                horizontalAlignment: Text.AlignHCenter
+                                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                                font.pixelSize: Style.font.iconLarge
+                            }
+                            Column {
+                                anchors.left: parent.left
+                                anchors.leftMargin: Style.space(48)
+                                anchors.right: voiceToggle.left
+                                anchors.rightMargin: Style.space(12)
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: Style.space(2)
+                                Text {
+                                    text: modelData.title
+                                    color: root.barForeground
+                                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                                    font.pixelSize: Style.font.body
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: root.voiceEnabledFor(modelData.key)
+                                        ? "Tap to toggle Voxtype; hold with another key for Ctrl"
+                                        : "Dictation is off"
+                                    color: Color.muted
+                                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    font.bold: true
+                                    font.letterSpacing: 1.0
+                                    elide: Text.ElideRight
+                                }
+                            }
+                            ToggleSwitch {
+                                id: voiceToggle
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                checked: root.voiceEnabledFor(modelData.key)
+                                busy: root.loading && root.operation === "voice" && root.pendingVoiceKey === modelData.key
+                                foreground: root.barForeground
+                                onToggled: root.setVoice(modelData.key, !root.voiceEnabledFor(modelData.key))
+                            }
                         }
-                        Text {
-                            text: (!root.voiceEnabled_
-                                ? "Dictation is off"
-                                : (root.enabled_
-                                    ? "Tap for Voxtype · hold with another key for Ctrl"
-                                    : "Tap for Voxtype · CapsLock is consumed")).toUpperCase()
-                            color: Color.muted
-                            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                            font.pixelSize: Style.font.caption
-                            font.bold: true
-                            font.letterSpacing: 1.0
-                            elide: Text.ElideRight
-                        }
-                    }
-                    ToggleSwitch {
-                        id: voiceToggle
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        checked: root.voiceEnabled_
-                        busy: root.loading && root.operation === "voice"
-                        foreground: root.barForeground
-                        onToggled: root.setVoice(!root.voiceEnabled_)
                     }
                 }
 

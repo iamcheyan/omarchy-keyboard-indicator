@@ -20,11 +20,15 @@ STATE_DIR = pathlib.Path(
 ) / "hancore.keyboard-center"
 STATE_FILE = STATE_DIR / "enabled"
 KEYD_DEST = pathlib.Path("/etc/keyd/hancore-ctrl-swap.conf")
+KEYD_CONFIG_DIR = pathlib.Path("/etc/keyd")
+KEYD_SELECTION_FILE = STATE_DIR / "keyboard_config"
 KEYD_REPOSITORY = "https://github.com/rvaiya/keyd.git"
 # Pin the source compiled without privileges. The commit hash is the integrity
 # check; pkexec receives only the resulting artifact bytes for installation.
 KEYD_COMMIT = "f564288ac2b19d2305a5b39023c474805ff8fce5"
 CONFIG_SCHEMA = "hancore keyboard-center voice-keys/1"
+DEVICE_BLOCK_START = "# BEGIN hancore.keyboard-center managed mappings"
+DEVICE_BLOCK_END = "# END hancore.keyboard-center managed mappings"
 VOICE_STATE_FILE = STATE_DIR / "voice_enabled"
 VOICE_STATE_FILES = {
     "capslock": VOICE_STATE_FILE,
@@ -34,6 +38,7 @@ VOICE_STATE_FILES = {
 VOICE_DESCRIPTION = "Keyboard key voice dictation"
 LEGACY_VOICE_DESCRIPTION = "Ctrl Swap voice dictation"
 VOICE_BINDINGS = (
+    # Legacy physical-key bindings and the previous F24 trigger only.
     "F24",
     "Caps_Lock",
     "Multi_key",
@@ -84,7 +89,9 @@ allowed = {
 }
 files = payload.get("files", {})
 removals = payload.get("remove", [])
-if any(path not in allowed for path in [*files, *removals]):
+def allowed_path(path):
+    return path in allowed or (path.startswith("/etc/keyd/") and path.endswith(".conf"))
+if any(not allowed_path(path) for path in [*files, *removals]):
     raise SystemExit("refusing an unexpected privileged destination")
 
 for path, encoded in files.items():
@@ -111,15 +118,19 @@ elif payload.get("restart"):
 
 
 def root_command(files: dict[str, bytes] | None = None, remove: tuple[str, ...] = (), *, enable: bool = False, restart: bool = False, stop: bool = False) -> None:
-    if shutil.which("pkexec") is None:
-        raise RuntimeError("pkexec is required to install the keyboard remap")
+    if shutil.which("sudo") is not None and subprocess.run(["sudo", "-n", "true"], check=False).returncode == 0:
+        launcher = ["sudo", "-n"]
+    elif shutil.which("pkexec") is not None:
+        launcher = ["pkexec"]
+    else:
+        raise RuntimeError("pkexec or passwordless sudo is required to install the keyboard remap")
     encoded = {
         path: base64.b64encode(content).decode("ascii")
         for path, content in (files or {}).items()
     }
     payload = json.dumps({"files": encoded, "remove": list(remove), "enable": enable, "restart": restart, "stop": stop})
     result = subprocess.run(
-        ["pkexec", "python3", "-c", PRIVILEGED_HELPER],
+        [*launcher, "python3", "-c", PRIVILEGED_HELPER],
         input=payload,
         capture_output=True,
         text=True,
@@ -147,9 +158,53 @@ def voice_state_keys() -> set[str]:
     return {key for key, path in VOICE_STATE_FILES.items() if path.exists()}
 
 
+def keyd_configs() -> list[dict[str, object]]:
+    """Return the installed keyd profiles so the UI can identify devices."""
+    result = []
+    try:
+        paths = sorted(KEYD_CONFIG_DIR.glob("*.conf"))
+    except OSError:
+        paths = []
+    for path in paths:
+        ids: list[str] = []
+        in_ids = False
+        try:
+            for raw in path.read_text().splitlines():
+                line = raw.strip()
+                if line.startswith("["):
+                    in_ids = line.lower() == "[ids]"
+                    continue
+                if in_ids and line and not line.startswith("#"):
+                    ids.append(line)
+        except OSError:
+            continue
+        result.append({"path": str(path), "name": path.name, "ids": ids,
+                       "label": f"{path.name} · {', '.join(ids) or 'unknown device'}"})
+    return result
+
+
+def selected_keyd_config() -> str:
+    try:
+        value = KEYD_SELECTION_FILE.read_text().strip()
+    except OSError:
+        value = ""
+    available = {item["path"] for item in keyd_configs()}
+    return value if value in available else str(KEYD_DEST)
+
+
+def select_keyd_config(path: str) -> None:
+    available = {item["path"] for item in keyd_configs()}
+    if path not in available:
+        raise RuntimeError(f"Unknown keyd configuration: {path}")
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    KEYD_SELECTION_FILE.write_text(path + "\n")
+    # A profile change is meaningful immediately when a remap is active.
+    sync(STATE_FILE.exists(), voice_state_keys(), force=True)
+
+
 def keyd_config(swap: bool = False, voice: bool | set[str] = False, *, voice_keys: set[str] | None = None) -> str | None:
-    # Each voice key is independent. A standalone tap emits F24 for Voxtype;
-    # overload(control, f24) keeps Ctrl chords intact for either Ctrl key.
+    # Match the original behavior: Ctrl keys use overload so Ctrl chords stay
+    # intact; a standalone Ctrl emits F24 after release and toggles Voxtype.
     selected = _voice_keys(voice, voice_keys)
     mapping = {
         "capslock": "layer(control)" if swap else "capslock",
@@ -188,18 +243,35 @@ def _normalize_keyd(value: str) -> str:
 
 def keyd_config_matches(swap: bool, voice: bool | set[str], *, voice_keys: set[str] | None = None) -> bool:
     expected = keyd_config(swap, voice, voice_keys=voice_keys)
+    destination = pathlib.Path(selected_keyd_config())
     if expected is None:
         # Neutral means this plugin owns no keyd configuration.
-        return not KEYD_DEST.exists()
+        if destination == KEYD_DEST:
+            return not KEYD_DEST.exists()
+        try:
+            return DEVICE_BLOCK_START not in destination.read_text()
+        except OSError:
+            return True
     try:
-        current = KEYD_DEST.read_text()
+        current = destination.read_text()
     except OSError:
         return False
     # A config without the schema marker was written by a different
     # generation of this plugin; treat it as drift and rebuild.
-    return CONFIG_SCHEMA in current and (
-        _normalize_keyd(current) == _normalize_keyd(expected)
-    )
+    if destination == KEYD_DEST:
+        return CONFIG_SCHEMA in current and _normalize_keyd(current) == _normalize_keyd(expected)
+    block = _device_block(expected)
+    return _normalize_keyd(block) in _normalize_keyd(current)
+
+
+def _device_block(config: str) -> str:
+    body = config.split("[main]\n", 1)[-1]
+    return f"{DEVICE_BLOCK_START}\n[main]\n{body}{DEVICE_BLOCK_END}\n"
+
+
+def _without_device_block(content: str) -> str:
+    pattern = re.escape(DEVICE_BLOCK_START) + r"\n.*?" + re.escape(DEVICE_BLOCK_END) + r"\n?"
+    return re.sub(pattern, "", content, flags=re.DOTALL)
 
 
 def pinned_keyd_commit() -> str:
@@ -302,17 +374,32 @@ def _apply_keyd_unlocked(swap: bool, voice: bool | set[str], *, force: bool = Fa
     if not force and remap_is_live(swap, voice):
         return
     config = keyd_config(swap, voice)
+    destination = pathlib.Path(selected_keyd_config())
     if config is None:
         # Remove our wildcard config instead of installing an identity map.
         # Restart keyd so any user-owned config can become active again.
         config_path.unlink(missing_ok=True)
-        if KEYD_DEST.exists():
-            root_command(remove=(str(KEYD_DEST),), restart=_keyd_unit_busy())
+        if destination == KEYD_DEST:
+            if KEYD_DEST.exists():
+                root_command(remove=(str(KEYD_DEST),), restart=_keyd_unit_busy())
+        elif destination.exists():
+            cleaned = _without_device_block(destination.read_text())
+            root_command({str(destination): cleaned.encode()}, restart=_keyd_unit_busy())
     else:
-        config_path.write_text(config)
+        if destination == KEYD_DEST:
+            config_path.write_text(config)
+            payload = config_path.read_bytes()
+        else:
+            base = _without_device_block(destination.read_text() if destination.exists() else "")
+            payload = (base.rstrip() + "\n\n" + _device_block(config)).encode()
+            config_path.write_bytes(payload)
         freshly_installed = ensure_keyd_installed(config_path)
         if not freshly_installed:
-            root_command({str(KEYD_DEST): config_path.read_bytes()}, enable=True)
+            root_command(
+                {str(destination): payload},
+                remove=(str(KEYD_DEST),) if destination != KEYD_DEST and KEYD_DEST.exists() else (),
+                enable=True,
+            )
     if not remap_is_live(swap, voice):
         raise RuntimeError("keyd is not running the requested remap")
 
@@ -326,8 +413,6 @@ def _sync_unlocked(swap: bool, voice: bool | set[str], *, force: bool) -> None:
     if selected and shutil.which("voxtype") is None:
         raise RuntimeError("Voxtype is not installed")
     if selected:
-        # Bind before keyd: while the previous mapping is still live the
-        # bind is inert, so a failed keyd step cannot leave a dead CapsLock.
         install_voice_binds()
     _apply_keyd_unlocked(swap, voice, force=force)
     for key, path in VOICE_STATE_FILES.items():
@@ -400,23 +485,23 @@ def eval_lua(lua: str) -> None:
     raise RuntimeError(last_detail)
 
 
-def _voice_bind(key: str, *, release: bool) -> str:
+def _voice_bind(*, release: bool) -> str:
     flags = "release = true, " if release else ""
     return (
-        f'hl.bind("{key}", hl.dsp.exec_cmd("voxtype record toggle"), '
+        f'hl.bind("F24", hl.dsp.exec_cmd("voxtype record toggle"), '
         f'{{ {flags}non_consuming = false, '
-        f'description = "Keyboard key voice dictation" }})'
+        f'description = "{VOICE_DESCRIPTION}" }})'
     )
 
 
 def install_voice_binds() -> None:
-    # Voice always arrives as F24 from keyd. Do not bind Caps_Lock/Multi_key:
-    # those are the physical key only when voice is off.
+    # F24 is the plugin-owned synthetic trigger. F9 remains the user's normal
+    # Voxtype toggle and is never modified by this plugin.
     owned = _owned_voice_binds()
     if len(owned) == 1 and owned[0].get("key") == "F24" and owned[0].get("release") is True:
         return
     remove_owned_voice_bindings()
-    eval_lua(_voice_bind("F24", release=True))
+    eval_lua(_voice_bind(release=True))
 
 
 def voice_enable(key: str = "capslock") -> None:
@@ -438,17 +523,18 @@ def ensure() -> None:
 def status() -> None:
     swap = STATE_FILE.exists()
     voice_keys = voice_state_keys()
-    voice = bool(voice_keys)
     print(json.dumps({
-        "enabled": swap and KEYD_DEST.exists(),
+        "enabled": swap and pathlib.Path(selected_keyd_config()).exists(),
         "backend": "keyd",
         "keydInstalled": shutil.which("keyd") is not None,
-        "voiceEnabled": voice,
+        "voiceEnabled": bool(voice_keys),
         "voiceCapslockEnabled": "capslock" in voice_keys,
         "voiceLeftControlEnabled": "leftcontrol" in voice_keys,
         "voiceRightControlEnabled": "rightcontrol" in voice_keys,
         "voiceKeys": sorted(voice_keys),
-        "remapApplied": remap_is_live(swap, voice),
+        "keydConfigs": keyd_configs(),
+        "selectedKeydConfig": selected_keyd_config(),
+        "remapApplied": remap_is_live(swap, voice_keys),
     }))
 
 
@@ -461,13 +547,18 @@ def main() -> int:
         "ensure": ensure,
         "voice-enable": voice_enable,
         "voice-disable": voice_disable,
+        "select-keyd-config": select_keyd_config,
     }
     action = actions.get(command)
     if action is None:
         print(f"unknown command: {command}", file=sys.stderr)
         return 2
     try:
-        if command in {"voice-enable", "voice-disable"}:
+        if command == "select-keyd-config":
+            if len(sys.argv) != 3:
+                raise RuntimeError("usage: ctrl_swap.py select-keyd-config <path>")
+            action(sys.argv[2])
+        elif command in {"voice-enable", "voice-disable"}:
             action(sys.argv[2] if len(sys.argv) > 2 else "capslock")
         else:
             action()

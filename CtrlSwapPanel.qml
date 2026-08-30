@@ -34,6 +34,8 @@ Panel {
     property var keyboardLayoutOptions: []
     property string currentKeyboardLayout: ""
     property var keyboardLayoutNames: ({})
+    property var keydConfigOptions: []
+    property string selectedKeydConfig: ""
     readonly property color panelForeground: Color.popups.text
     readonly property color panelBackground: Color.popups.background
     readonly property color panelMuted: Util.alpha(Color.popups.text, 0.58)
@@ -58,6 +60,17 @@ Panel {
             root.voiceCapslockEnabled_ = data.voiceCapslockEnabled === true;
             root.voiceLeftControlEnabled_ = data.voiceLeftControlEnabled === true;
             root.voiceRightControlEnabled_ = data.voiceRightControlEnabled === true;
+            root.selectedKeydConfig = data.selectedKeydConfig || "";
+            var configOptions = [];
+            var configs = Array.isArray(data.keydConfigs) ? data.keydConfigs : [];
+            for (var c = 0; c < configs.length; c++) {
+                configOptions.push({
+                    value: String(configs[c].path || ""),
+                    label: String(configs[c].label || configs[c].name || configs[c].path || "")
+                });
+            }
+            root.keydConfigOptions = configOptions;
+            keydConfigDropdown.value = root.selectedKeydConfig;
             root.optionsText = data.options || "";
             root.remapApplied_ = data.remapApplied !== false;
             if (data.remapApplied === false) {
@@ -158,6 +171,15 @@ Panel {
         writeProcess.running = true;
     }
 
+    function setKeydConfig(path) {
+        if (writeProcess.running || path === "") return;
+        writeProcess.command = ["python3", root.swapTool, "select-keyd-config", path];
+        root.loading = true;
+        root.operation = "config";
+        root.statusText = "Selecting keyboard keyd configuration…";
+        writeProcess.running = true;
+    }
+
     Process {
         id: readProcess
         command: ["python3", root.swapTool, "status"]
@@ -223,13 +245,15 @@ Panel {
                 } else {
                     root.statusText = root.operation === "voice"
                         ? "Dictation key settings updated."
+                        : (root.operation === "config"
+                            ? "Keyboard keyd configuration selected."
                         : (root.enabled_
                             ? (root.voiceEnabled_
                                 ? "Hardware Ctrl swap is active. Tap CapsLock or Ctrl for dictation; hold either for Ctrl."
                                 : "Hardware Ctrl swap is active.")
                             : (root.voiceEnabled_
                                 ? "Ctrl swap is off. CapsLock/Ctrl dictation is still active."
-                                : "The original key mapping is restored."));
+                                : "The original key mapping is restored.")));
                 }
                 root.operation = "";
                 root.pendingVoiceKey = "";
@@ -282,6 +306,18 @@ Panel {
                     background: root.panelBackground
                     accent: Color.accent
                     onChanged: function(value) { root.setKeyboardLayout(value); }
+                }
+
+                KeyboardDropdown {
+                    id: keydConfigDropdown
+                    width: parent.width
+                    label: "Keyboard keyd configuration"
+                    value: root.selectedKeydConfig
+                    options: root.keydConfigOptions
+                    foreground: root.panelForeground
+                    background: root.panelBackground
+                    accent: Color.accent
+                    onChanged: function(value) { root.setKeydConfig(value); }
                 }
 
                 Item {
@@ -377,7 +413,7 @@ Panel {
                                 }
                                 Text {
                                     text: root.voiceEnabledFor(modelData.key)
-                                        ? "Tap to toggle Voxtype; hold with another key for Ctrl"
+                                        ? "Press alone to toggle Voxtype; Ctrl shortcuts remain available"
                                         : "Dictation is off"
                                     color: root.panelMuted
                                     font.family: root.bar ? root.bar.fontFamily : Style.font.family

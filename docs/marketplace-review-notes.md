@@ -54,9 +54,9 @@ security audit.
 - Right Ctrl dictation。
 
 每个开关分别保存状态并生成 keyd 映射，关闭或开启其中一个不会改变另外两个。
-Left/Right Ctrl 使用 `overload(control, f24)`，单击触发 Voxtype，按住并组合其它
-按键仍保留正常 Ctrl 快捷键。原有 CapsLock/Left Ctrl 交换开关、提权边界、状态机
-事务顺序和 F24 Hyprland 绑定保持不变。
+Left/Right Ctrl 使用 `overload(control, f24)`，组合键保留 Ctrl，单独按键在松开时
+切换 Voxtype。原有 CapsLock/Left Ctrl 交换开关、提权边界、状态机
+事务顺序和 F24 Hyprland 绑定保持不变，F9 保留用户原有的切换行为。
 
 同时更新了面板、英文/中文说明、schema 代际标记和独立映射回归测试。版本更新为
 `0.4.1`。请审核方按最新 HEAD 重新运行 marketplace validation 并复审本轮功能。

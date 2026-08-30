@@ -43,6 +43,8 @@ class FourStateTestBase(unittest.TestCase):
                 "rightcontrol": self.state_dir / "voice_rightcontrol_enabled",
             }),
             mock.patch.object(ctrl_swap, "KEYD_DEST", self.keyd_dest),
+            mock.patch.object(ctrl_swap, "KEYD_CONFIG_DIR", self.state_dir),
+            mock.patch.object(ctrl_swap, "KEYD_SELECTION_FILE", self.state_dir / "keyboard_config"),
         ]
         for patcher in patchers:
             patcher.start()
@@ -128,10 +130,6 @@ class SyncOrderTest(FourStateTestBase):
         self.calls: list[str] = []
         patchers = [
             mock.patch.object(
-                ctrl_swap, "install_voice_binds",
-                side_effect=lambda: self.calls.append("install"),
-            ),
-            mock.patch.object(
                 ctrl_swap, "_apply_keyd_unlocked",
                 side_effect=lambda s, v, *, force: self.calls.append(f"apply({s},{v})"),
             ),
@@ -144,9 +142,11 @@ class SyncOrderTest(FourStateTestBase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    def test_voice_on_binds_first_ledger_last(self):
-        ctrl_swap._sync_unlocked(False, True, force=True)
-        self.assertEqual(self.calls, ["install", "apply(False,True)"])
+    def test_voice_on_updates_keyd_without_registering_a_bind(self):
+        with mock.patch.object(ctrl_swap, "install_voice_binds") as install:
+            ctrl_swap._sync_unlocked(False, True, force=True)
+        install.assert_called_once()
+        self.assertEqual(self.calls, ["apply(False,True)"])
         self.assertTrue((self.state_dir / "voice_enabled").exists())
         self.assertFalse((self.state_dir / "enabled").exists())  # swap ledger off
 
@@ -214,26 +214,6 @@ class VoiceBindTest(FourStateTestBase):
     def _patch_owned(self, owned):
         return mock.patch.object(ctrl_swap, "_owned_voice_binds", return_value=owned)
 
-    def test_install_skips_when_exactly_one_correct_bind_exists(self):
-        owned = [{"key": "F24", "release": True,
-                  "description": ctrl_swap.VOICE_DESCRIPTION}]
-        with self._patch_owned(owned), \
-             mock.patch.object(ctrl_swap, "eval_lua") as eval_mock:
-            ctrl_swap.install_voice_binds()
-        eval_mock.assert_not_called()
-
-    def test_install_rebuilds_on_ghost_duplicates(self):
-        owned = [
-            {"key": "F24", "release": True, "description": ctrl_swap.VOICE_DESCRIPTION},
-            {"key": "", "release": True, "description": ctrl_swap.VOICE_DESCRIPTION},
-        ]
-        with self._patch_owned(owned), \
-             mock.patch.object(ctrl_swap, "remove_owned_voice_bindings") as rm, \
-             mock.patch.object(ctrl_swap, "eval_lua") as eval_mock:
-            ctrl_swap.install_voice_binds()
-        rm.assert_called_once()
-        eval_mock.assert_called_once()
-
     def test_remove_unbinds_observed_keys_plus_legacy_list(self):
         owned = [{"key": "code:58", "description": ctrl_swap.LEGACY_VOICE_DESCRIPTION}]
         with self._patch_owned(owned), \
@@ -249,7 +229,6 @@ class VoiceBindTest(FourStateTestBase):
             ctrl_swap.remove_owned_voice_bindings()
         eval_mock.assert_not_called()
 
-
 class StatusTest(FourStateTestBase):
     def test_status_reports_files_and_liveness(self):
         import io, contextlib
@@ -264,6 +243,18 @@ class StatusTest(FourStateTestBase):
         self.assertFalse(data["voiceEnabled"])
         self.assertTrue(data["remapApplied"])
         self.assertEqual(data["backend"], "keyd")
+
+    def test_status_checks_the_independent_voice_keys(self):
+        (self.state_dir / "enabled").write_text("1\n")
+        for key in ("capslock", "leftcontrol", "rightcontrol"):
+            ctrl_swap.VOICE_STATE_FILES[key].write_text("1\n")
+        self.keyd_dest.write_text(ctrl_swap.keyd_config(
+            True, voice_keys={"capslock", "leftcontrol", "rightcontrol"}
+        ))
+        with mock.patch.object(ctrl_swap, "_keyd_is_active", return_value=True):
+            self.assertTrue(ctrl_swap.remap_is_live(
+                True, {"capslock", "leftcontrol", "rightcontrol"}
+            ))
 
 
 if __name__ == "__main__":

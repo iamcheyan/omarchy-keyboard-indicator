@@ -50,8 +50,9 @@ _Expanded input-method selector._
 
 keyd stays installed whenever the Ctrl swap or any dictation switch is on.
 The generated configuration depends on the four independent controls. Each
-enabled voice key uses a standalone tap to toggle Voxtype; holding either Ctrl
-key with another key keeps normal Ctrl shortcuts working.
+enabled voice key emits the plugin-owned F24 signal. A standalone press toggles
+Voxtype on release; holding either Ctrl key with another key keeps normal Ctrl
+shortcuts working.
 
 Swap only:
 
@@ -75,7 +76,7 @@ capslock = f24
 leftcontrol = overload(control, f24)
 ```
 
-Swap and dictation together (tap = Voxtype, hold with another key = Ctrl):
+Swap and dictation together (standalone press = Voxtype, combination = Ctrl):
 
 ```text
 [ids]
@@ -92,20 +93,26 @@ The file is installed as `/etc/keyd/hancore-ctrl-swap.conf` after the user appro
 ~/.local/state/hancore.keyboard-center/enabled
 ```
 
+The panel also lists the installed `/etc/keyd/*.conf` profiles with their device
+IDs. Selecting a profile applies the plugin mapping to that profile while
+preserving its existing mappings; the selection is stored in the same state
+directory. This is useful when a keyboard has an explicit keyd profile that
+would otherwise win over the plugin's wildcard profile.
+
 ## Optional per-key dictation
 
 The panel provides separate switches for CapsLock, Left Ctrl, and Right Ctrl.
-Each enabled key runs Omarchy's standard Voxtype toggle command when pressed
-and released by itself:
+Each enabled key uses the plugin-owned F24 toggle trigger when pressed alone:
 
 ```text
 voxtype record toggle
 ```
 
-keyd remaps enabled voice keys to an internal `F24` signal. Left and Right Ctrl
-use `overload(control, f24)` so holding either key with another key preserves
-shortcuts such as Ctrl+C and Ctrl+W. Disabling one switch removes only that
-key's voice mapping. These options require the `voxtype` command.
+keyd remaps enabled voice keys to the plugin-owned `F24` signal. F24 toggles
+Voxtype on release. F9 remains the user's original Voxtype toggle. Left and
+Right Ctrl use `overload(control, f24)` so Ctrl shortcuts remain available.
+Disabling one switch removes only that key's voice mapping. These options
+require the `voxtype` command.
 
 ## Boundary and compatibility notes
 

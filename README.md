@@ -1,7 +1,9 @@
 # Keyboard Indicator
 
-## 0.4.2
+## 0.4.4
 
+- Fixed keyboard-panel option text overlapping the right-side toggles at
+  narrow widths and larger font sizes.
 - Adapted the settings panel text, dropdowns, and controls to Omarchy popup
   theme tokens so light and dark themes keep readable contrast.
 

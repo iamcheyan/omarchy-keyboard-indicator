@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-08-31 — responsive settings panel rows
+
+- Fixed remap and dictation option text overlapping the right-side toggles.
+- Rows now reserve the toggle area, wrap text at the available width, grow to
+  fit wrapped content, and scroll when the panel is shorter than its content.
+
 ## 2026-08-30 — keyboard profile and voice trigger repair
 
 - Restored the original voice behavior: CapsLock emits the plugin-owned F24

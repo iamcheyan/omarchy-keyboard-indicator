@@ -279,173 +279,196 @@ Panel {
             anchors.fill: parent
             onCloseRequested: root.close()
 
-            Column {
+            Item {
                 id: content
-                width: parent.width
-                spacing: Style.space(12)
+                anchors.fill: parent
+                implicitWidth: contentScroller.contentWidth
+                implicitHeight: contentColumn.implicitHeight
 
-                KeyboardDropdown {
-                    id: inputMethodDropdown
-                    width: parent.width
-                    label: "Input Method · " + root.inputMethodName + (root.inputMethodVariant !== "" ? " · " + root.inputMethodVariant : "")
-                    value: root.inputSelectionValue
-                    options: root.inputDropdownOptions
-                    foreground: root.panelForeground
-                    background: root.panelBackground
-                    accent: Color.accent
-                    onChanged: function(value) { root.setInputSchema(value); }
-                }
+                Flickable {
+                    id: contentScroller
+                    anchors.fill: parent
+                    contentWidth: width
+                    contentHeight: contentColumn.implicitHeight
+                    clip: true
+                    interactive: contentHeight > height
+                    boundsBehavior: Flickable.StopAtBounds
 
-                KeyboardDropdown {
-                    id: keyboardLayoutDropdown
-                    width: parent.width
-                    label: "Keyboard Layout"
-                    value: root.currentKeyboardLayout
-                    options: root.keyboardLayoutOptions
-                    foreground: root.panelForeground
-                    background: root.panelBackground
-                    accent: Color.accent
-                    onChanged: function(value) { root.setKeyboardLayout(value); }
-                }
-
-                KeyboardDropdown {
-                    id: keydConfigDropdown
-                    width: parent.width
-                    label: "Keyboard keyd configuration"
-                    value: root.selectedKeydConfig
-                    options: root.keydConfigOptions
-                    foreground: root.panelForeground
-                    background: root.panelBackground
-                    accent: Color.accent
-                    onChanged: function(value) { root.setKeydConfig(value); }
-                }
-
-                Item {
-                    width: parent.width
-                    height: Style.space(40)
-
-                    Text {
-                        width: Style.space(32)
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "󰌌"
-                        color: root.panelForeground
-                        horizontalAlignment: Text.AlignHCenter
-                        font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                        font.pixelSize: Style.font.iconLarge
-                    }
                     Column {
-                        anchors.left: parent.left
-                        anchors.leftMargin: Style.space(48)
-                        anchors.right: remapToggle.left
-                        anchors.rightMargin: Style.space(12)
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Style.space(2)
-                        Text {
-                            text: "Swap CapsLock and Left Ctrl"
-                            color: root.panelForeground
-                            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                            font.pixelSize: Style.font.body
-                            font.bold: true
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            text: (root.enabled_
-                                ? "Hardware remap is active"
-                                : (root.voiceEnabled_ ? "Default Ctrl · CapsLock runs dictation" : "Using the default keyboard mapping")).toUpperCase()
-                            color: root.panelMuted
-                            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                            font.pixelSize: Style.font.caption
-                            font.bold: true
-                            font.letterSpacing: 1.0
-                            elide: Text.ElideRight
-                        }
-                    }
-                    ToggleSwitch {
-                        id: remapToggle
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        checked: root.enabled_
-                        busy: root.loading && root.operation === "swap"
-                        foreground: root.panelForeground
-                        onToggled: root.setSwap(!root.enabled_)
-                    }
-                }
+                        id: contentColumn
+                        width: contentScroller.width
+                        spacing: Style.space(12)
 
-                Column {
-                    width: parent.width
-                    spacing: Style.space(6)
-                    Repeater {
-                        model: [
-                            { key: "capslock", title: "CapsLock dictation" },
-                            { key: "leftcontrol", title: "Left Ctrl dictation" },
-                            { key: "rightcontrol", title: "Right Ctrl dictation" }
-                        ]
-                        delegate: Item {
-                            required property var modelData
+                        KeyboardDropdown {
+                            id: inputMethodDropdown
                             width: parent.width
-                            height: Style.space(40)
+                            label: "Input Method · " + root.inputMethodName + (root.inputMethodVariant !== "" ? " · " + root.inputMethodVariant : "")
+                            value: root.inputSelectionValue
+                            options: root.inputDropdownOptions
+                            foreground: root.panelForeground
+                            background: root.panelBackground
+                            accent: Color.accent
+                            onChanged: function(value) { root.setInputSchema(value); }
+                        }
+
+                        KeyboardDropdown {
+                            id: keyboardLayoutDropdown
+                            width: parent.width
+                            label: "Keyboard Layout"
+                            value: root.currentKeyboardLayout
+                            options: root.keyboardLayoutOptions
+                            foreground: root.panelForeground
+                            background: root.panelBackground
+                            accent: Color.accent
+                            onChanged: function(value) { root.setKeyboardLayout(value); }
+                        }
+
+                        KeyboardDropdown {
+                            id: keydConfigDropdown
+                            width: parent.width
+                            label: "Keyboard keyd configuration"
+                            value: root.selectedKeydConfig
+                            options: root.keydConfigOptions
+                            foreground: root.panelForeground
+                            background: root.panelBackground
+                            accent: Color.accent
+                            onChanged: function(value) { root.setKeydConfig(value); }
+                        }
+
+                        Item {
+                            width: parent.width
+                            height: Math.max(Style.space(48), remapText.implicitHeight + Style.space(8))
 
                             Text {
                                 width: Style.space(32)
                                 anchors.left: parent.left
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "󰍬"
+                                text: "󰌌"
                                 color: root.panelForeground
                                 horizontalAlignment: Text.AlignHCenter
                                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                                 font.pixelSize: Style.font.iconLarge
                             }
                             Column {
+                                id: remapText
                                 anchors.left: parent.left
                                 anchors.leftMargin: Style.space(48)
-                                anchors.right: voiceToggle.left
+                                anchors.right: remapToggle.left
                                 anchors.rightMargin: Style.space(12)
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: Style.space(2)
                                 Text {
-                                    text: modelData.title
+                                    width: parent.width
+                                    text: "Swap CapsLock and Left Ctrl"
                                     color: root.panelForeground
                                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                                     font.pixelSize: Style.font.body
                                     font.bold: true
-                                    elide: Text.ElideRight
+                                    wrapMode: Text.WordWrap
                                 }
                                 Text {
-                                    text: root.voiceEnabledFor(modelData.key)
-                                        ? "Press alone to toggle Voxtype; Ctrl shortcuts remain available"
-                                        : "Dictation is off"
+                                    width: parent.width
+                                    text: (root.enabled_
+                                        ? "Hardware remap is active"
+                                        : (root.voiceEnabled_ ? "Default Ctrl · CapsLock runs dictation" : "Using the default keyboard mapping")).toUpperCase()
                                     color: root.panelMuted
                                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                                     font.pixelSize: Style.font.caption
                                     font.bold: true
                                     font.letterSpacing: 1.0
-                                    elide: Text.ElideRight
+                                    wrapMode: Text.WordWrap
                                 }
                             }
                             ToggleSwitch {
-                                id: voiceToggle
+                                id: remapToggle
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                checked: root.voiceEnabledFor(modelData.key)
-                                busy: root.loading && root.operation === "voice" && root.pendingVoiceKey === modelData.key
+                                checked: root.enabled_
+                                busy: root.loading && root.operation === "swap"
                                 foreground: root.panelForeground
-                                onToggled: root.setVoice(modelData.key, !root.voiceEnabledFor(modelData.key))
+                                onToggled: root.setSwap(!root.enabled_)
                             }
                         }
-                    }
-                }
 
-                Text {
-                    width: parent.width
-                    text: root.loading ? "Applying…"
-                        : (root.statusText !== "" ? root.statusText
-                            : (!root.remapApplied_ ? "keyd does not match the selected state."
-                                : ((root.enabled_ || root.voiceEnabled_) ? "keyd is active." : "keyd is passing keys through.")))
-                    color: root.statusText !== "" ? Color.accent : root.panelMuted
-                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                    font.pixelSize: Style.font.caption
-                    wrapMode: Text.WordWrap
+                        Column {
+                            width: parent.width
+                            spacing: Style.space(6)
+                            Repeater {
+                                model: [
+                                    { key: "capslock", title: "CapsLock dictation" },
+                                    { key: "leftcontrol", title: "Left Ctrl dictation" },
+                                    { key: "rightcontrol", title: "Right Ctrl dictation" }
+                                ]
+                                delegate: Item {
+                                    required property var modelData
+                                    width: parent.width
+                                    height: Math.max(Style.space(48), voiceText.implicitHeight + Style.space(8))
+
+                                    Text {
+                                        width: Style.space(32)
+                                        anchors.left: parent.left
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "󰍬"
+                                        color: root.panelForeground
+                                        horizontalAlignment: Text.AlignHCenter
+                                        font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                                        font.pixelSize: Style.font.iconLarge
+                                    }
+                                    Column {
+                                        id: voiceText
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: Style.space(48)
+                                        anchors.right: voiceToggle.left
+                                        anchors.rightMargin: Style.space(12)
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: Style.space(2)
+                                        Text {
+                                            width: parent.width
+                                            text: modelData.title
+                                            color: root.panelForeground
+                                            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                                            font.pixelSize: Style.font.body
+                                            font.bold: true
+                                            wrapMode: Text.WordWrap
+                                        }
+                                        Text {
+                                            width: parent.width
+                                            text: root.voiceEnabledFor(modelData.key)
+                                                ? "Press alone to toggle Voxtype; Ctrl shortcuts remain available"
+                                                : "Dictation is off"
+                                            color: root.panelMuted
+                                            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                                            font.pixelSize: Style.font.caption
+                                            font.bold: true
+                                            font.letterSpacing: 1.0
+                                            wrapMode: Text.WordWrap
+                                        }
+                                    }
+                                    ToggleSwitch {
+                                        id: voiceToggle
+                                        anchors.right: parent.right
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        checked: root.voiceEnabledFor(modelData.key)
+                                        busy: root.loading && root.operation === "voice" && root.pendingVoiceKey === modelData.key
+                                        foreground: root.panelForeground
+                                        onToggled: root.setVoice(modelData.key, !root.voiceEnabledFor(modelData.key))
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: root.loading ? "Applying…"
+                                : (root.statusText !== "" ? root.statusText
+                                    : (!root.remapApplied_ ? "keyd does not match the selected state."
+                                        : ((root.enabled_ || root.voiceEnabled_) ? "keyd is active." : "keyd is passing keys through.")))
+                            color: root.statusText !== "" ? Color.accent : root.panelMuted
+                            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                            font.pixelSize: Style.font.caption
+                            wrapMode: Text.WordWrap
+                        }
+                    }
                 }
             }
         }

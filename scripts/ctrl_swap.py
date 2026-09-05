@@ -281,7 +281,7 @@ def pinned_keyd_commit() -> str:
 
 
 def ensure_keyd_installed(config_path: pathlib.Path) -> bool:
-    if shutil.which("keyd") is not None:
+    if shutil.which("keyd") is not None or _keyd_is_active():
         return False
     if shutil.which("git") is None or shutil.which("make") is None:
         raise RuntimeError("keyd is not installed and git/make are unavailable")
@@ -526,7 +526,7 @@ def status() -> None:
     print(json.dumps({
         "enabled": swap and pathlib.Path(selected_keyd_config()).exists(),
         "backend": "keyd",
-        "keydInstalled": shutil.which("keyd") is not None,
+        "keydInstalled": shutil.which("keyd") is not None or _keyd_is_active(),
         "voiceEnabled": bool(voice_keys),
         "voiceCapslockEnabled": "capslock" in voice_keys,
         "voiceLeftControlEnabled": "leftcontrol" in voice_keys,
